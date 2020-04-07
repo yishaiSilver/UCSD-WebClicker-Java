@@ -18,6 +18,7 @@ import com.google.cloud.firestore.Firestore;
 import com.google.cloud.firestore.FirestoreException;
 import com.google.cloud.firestore.QueryDocumentSnapshot;
 import com.google.cloud.firestore.QuerySnapshot;
+import com.google.cloud.firestore.SetOptions;
 import com.google.cloud.firestore.WriteResult;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.FirebaseOptions;
@@ -27,12 +28,17 @@ import com.google.firebase.database.annotations.Nullable;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 
 import sun.misc.Unsafe;
 
 public class WebController {
 
-	public static final String COURSE_NAME = "Course1";
+	public static final String COURSE_NAME = "test";
+	public static final String CHARACTERS = "0123456789"
+			+ "abcdefghijklmnopqrstuvwxyz"
+			+ "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+	public static final int ID_LENGTH = 20;
 	
 	private int votesA = 0;
 	private int votesB = 0;
@@ -41,6 +47,8 @@ public class WebController {
 	private int votesE = 0;
 	private int[] allVotes;
 	
+	private Display display;
+	
 	private Firestore db;
 	
 	private String courseID = "";
@@ -48,7 +56,9 @@ public class WebController {
 	private String pollID = "";
 	private Map<String, Object> courseCategories;
 	
-	public WebController() {
+	public WebController(Display display) {
+		this.display = display;
+		
 		Thread t = new Thread(new Runnable() { public void run() { 
 			BasicConfigurator.configure(); // for web
 			while(true) {
@@ -60,19 +70,25 @@ public class WebController {
 					    .build();
 					FirebaseApp.initializeApp(options);
 					db = FirestoreClient.getFirestore();
-					System.err.println("CONNECTED");
 					
 					ApiFuture<QuerySnapshot> query = db.collection("courses").get();
 					QuerySnapshot querySnapshot = query.get();
 					List<QueryDocumentSnapshot> documents = querySnapshot.getDocuments();
 					
 					for (QueryDocumentSnapshot document : documents) {
-						if(document.getString("courseName") == COURSE_NAME) {
+						System.err.println(document.get("courseName"));
+						if(document.getString("courseName") != null &&
+								document.getString("courseName").contentEquals(COURSE_NAME)) {
 							courseID = document.getId();
 							pollID = document.getString("courseActivityPollID");
 							courseCategories = (HashMap<String, Object>)document.get("courseCategories");
+							System.err.println("UPDATED COURSE");
+							break;
 						}
 					}
+					
+					//temporary
+					newSession();
 					break;
 				} catch(Exception e) {
 					System.out.println("Failed to connect to web.");
@@ -92,26 +108,23 @@ public class WebController {
 	public boolean newSession() {
 		if(db != null) {
 			try {
+				
+				sessionID = getID();
+				
 				Map<String, Object> docData = new HashMap<>();
 				docData.put("sessionCourseID", courseID);
-				long startTime = System.currentTimeMillis();
-				docData.put("sessionStartTime", startTime);
-				ApiFuture<WriteResult> future = db.collection("sessions").document().set(docData);
+				docData.put("sessionStartTime", System.currentTimeMillis());
+				ApiFuture<WriteResult> future = db.collection("sessions").document(sessionID).set(docData);
 				
 				ApiFuture<QuerySnapshot> query = db.collection("sessions").get();
 				QuerySnapshot querySnapshot = query.get();
 				List<QueryDocumentSnapshot> documents = querySnapshot.getDocuments();
 				
-				for (QueryDocumentSnapshot document : documents) {
-					if(document.getLong("sessionStartTime") == startTime) {
-						sessionID = document.getId();
-						break;
-					}
-				}
-				
 				docData = new HashMap<>();
 				docData.put("courseActivitySessionID", sessionID);
-				future = db.collection("sessions").document(courseID).set(docData);
+				future = db.collection("courses").document(courseID).set(docData, SetOptions.merge());
+				
+				System.err.println("SESSION STARTED");
 				
 				return true;
 				
@@ -124,34 +137,23 @@ public class WebController {
 	}
 	
 	public void startPoll() {
+		display.nextQuestion();
+		
 		if(db != null) {
 			try {
+				pollID = getID();
+				
 				Map<String, Object> docData = new HashMap<>();
 				docData.put("pollCategories", courseCategories);
 				docData.put("pollSessionID", sessionID);
-				long startTime = System.currentTimeMillis();
-				docData.put("pollStartTime", startTime);
-				ApiFuture<WriteResult> future = db.collection("polls").document().set(docData);
-				
-				
-				// I really need to change this to use a known ID so that we don't have to loop
-				// through all of the polls in the data base
-				ApiFuture<QuerySnapshot> query = db.collection("polls").get();
-				QuerySnapshot querySnapshot = query.get();
-				List<QueryDocumentSnapshot> documents = querySnapshot.getDocuments();
-				
-				for (QueryDocumentSnapshot document : documents) {
-					if(document.getLong("pollsStartTime") == startTime) {
-						pollID = document.getId();
-						break;
-					}
-				}
-				// this would be the end of the change
+				docData.put("pollStartTime", System.currentTimeMillis());
+				ApiFuture<WriteResult> future = db.collection("polls").document(pollID).set(docData);
 				
 				docData = new HashMap<>();
 				docData.put("courseActivityPollID", pollID);
-				future = db.collection("sessions").document(courseID).set(docData);
+				future = db.collection("courses").document(courseID).set(docData, SetOptions.merge());
 				
+				System.err.println(pollID);
 				db.collection("polls").document(pollID).collection("students").addSnapshotListener(
 						new EventListener<QuerySnapshot>() {
 							@Override
@@ -167,7 +169,11 @@ public class WebController {
 									System.err.println(snapshot.getDocumentChanges());
 									List<DocumentChange> changes = snapshot.getDocumentChanges();
 									for(DocumentChange change : changes) {
-										//change.
+										QueryDocumentSnapshot doc = change.getDocument();
+										
+										String vote = doc.getString("vote");
+										display.newResponse(doc.getId(), vote);
+										//parseVote((String)doc.get("vote"));
 									}
 								}
 							}
@@ -188,7 +194,7 @@ public class WebController {
 				DocumentReference docRef = db.collection("courses").document(courseID);
 				Map<String, Object> data = new HashMap<>();
 				data.put("courseActivityPollID", pollID);
-				ApiFuture<WriteResult> result = docRef.set(data);
+				ApiFuture<WriteResult> result = docRef.set(data, SetOptions.merge());
 				
 			} catch (Exception e) {
 				System.out.println("Error stopping poll through web");
@@ -203,6 +209,26 @@ public class WebController {
 		votesC = 0;
 		votesD = 0;
 		votesE = 0;
+	}
+	
+	public void parseVote(String s) {
+		switch(s) {
+			case "A":
+				votesA++;
+				break;
+			case "B":
+				votesB++;
+				break;
+			case "C":
+				votesC++;
+				break;
+			case "D":
+				votesD++;
+				break;
+			case "E":
+				votesE++;
+				break;
+		}
 	}
 	
 	public int[] getVotes() {
@@ -243,4 +269,31 @@ public class WebController {
 	public int getNumVotes() {
 		return votesA + votesB + votesC + votesD + votesE;
 	}	
+	
+	public String getID() {
+		String id = "";
+		for(int i = 0; i < ID_LENGTH; i ++) {
+			Random rand = new Random();
+			int index = rand.nextInt(CHARACTERS.length());
+			id = id + CHARACTERS.charAt(index);
+		}
+		System.err.println(id);
+		return id;
+	}
+	
+	public boolean isConnected() {
+		return db != null;
+	}
+	
+	public void newVote(String id) {
+		Map<String, Object> docData = new HashMap<>();
+		docData.put("pollCategories", courseCategories);
+		docData.put("pollSessionID", sessionID);
+		docData.put("pollStartTime", System.currentTimeMillis());
+		ApiFuture<WriteResult> future = db.collection("polls").document(pollID).set(docData);
+		
+		docData = new HashMap<>();
+		docData.put("courseActivityPollID", pollID);
+		future = db.collection("courses").document(courseID).set(docData, SetOptions.merge());
+	}
 }

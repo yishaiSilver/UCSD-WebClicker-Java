@@ -62,6 +62,9 @@ public class USBController {
 	private int votesE = 0;
 	private int[] allVotes;
 	
+	private WebController web;
+	private Display display;
+	
 	private HidDevice dev;
 	
 	/**
@@ -69,7 +72,9 @@ public class USBController {
 	 * 
 	 * @param args none expected
 	 */
-	public USBController() {
+	public USBController(WebController web, Display display) {
+		this.web = web;
+		this.display = display;
 		
 		Thread t = new Thread(new Runnable() { public void run() { 
 			try {
@@ -127,6 +132,7 @@ public class USBController {
 									else if(data[0] == BYTE_RESPONSE_ONE && data[1] == BYTE_RESPONSE_TWO) {
 										//Get bytes responsible for ID
 										byte[] idArr = Arrays.copyOfRange(data, 5, 8);
+// need to switch to display, web	
 										String idStr = "";
 										//Add each byte to idStr
 										for(int i = 0; i < idArr.length; i ++) {
@@ -178,7 +184,7 @@ public class USBController {
 									System.out.println("Device removed.");
 									deviceOpen = false;
 									dev = null;
-									Display.setConnected(false);
+									//Display.setConnected(false);
 								}
 							});
 							break;

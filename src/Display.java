@@ -56,11 +56,11 @@ public class Display extends JFrame {
 	public static final int CLOSE_BUTTON = -1;
 	
 	//The number of students who have voted for each option
-	private static double aCount;
-	private static double bCount;
-	private static double cCount;
-	private static double dCount;
-	private static double eCount;
+	private static int aCount;
+	private static int bCount;
+	private static int cCount;
+	private static int dCount;
+	private static int eCount;
 	
 	//The chart
 	private static JFreeChart chart;
@@ -140,6 +140,10 @@ public class Display extends JFrame {
         public void windowDeactivated(WindowEvent e) {}
 	};
 	
+	public int getNumResponses() {
+		return aCount + bCount + cCount + dCount + eCount;
+	}
+	
 	/**
 	 * Used to log a student's response.
 	 * 
@@ -158,6 +162,7 @@ public class Display extends JFrame {
 			if(responses.get(i).getStudentID().equals(studentID)) {
 				responses.get(i).setResponse(response);
 				newStudent = false;
+				break;
 			}
 		}
 
@@ -264,7 +269,7 @@ public class Display extends JFrame {
 				);
 		
 		//Update title
-		setConnected(connected);
+		//setConnected(connected);
 		
 		//Modify the chart's grid-lines
 		CategoryPlot plot = chart.getCategoryPlot();
@@ -325,7 +330,7 @@ public class Display extends JFrame {
 	 * of not being connected
 	 * 
 	 * @param connectedArg boolean to represent being connected
-	 */
+	 *
 	public static void setConnected(boolean connectedArg) {
 		//Chart may not be initialized at beginning of program,
 		//ignore error.
@@ -341,6 +346,6 @@ public class Display extends JFrame {
 		}
 		
 		connected = connectedArg;
-	}
+	}*/
 }
 
