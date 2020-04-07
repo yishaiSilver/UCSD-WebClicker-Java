@@ -1,3 +1,4 @@
+import org.apache.log4j.BasicConfigurator;
 
 public class MainClass {
 	
@@ -5,12 +6,11 @@ public class MainClass {
 	public static final int NUM_VOTES = 5;
 	
 	public static void main(String[] args) {
-
 		Display display = new Display(); // used to display votes coming in
 
+		WebController web = new WebController(); // used to interface with the database.
+		
 		USBController usb = new USBController(); // interfaces with USB device.
-
-		WebController web = new WebController(WEB_URL); // used to interface with the database.
 		
 		ControlWindow controller = new ControlWindow(display, usb, web);
 		
