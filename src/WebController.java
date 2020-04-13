@@ -5,6 +5,9 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
+import java.awt.BorderLayout;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -30,6 +33,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
+import javax.swing.JFrame;
+import javax.swing.JPasswordField;
+import javax.swing.JTextField;
+
 import sun.misc.Unsafe;
 
 public class WebController {
@@ -39,6 +46,10 @@ public class WebController {
 			+ "abcdefghijklmnopqrstuvwxyz"
 			+ "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 	public static final int ID_LENGTH = 20;
+	
+	private static final int WINDOW_WIDTH = 500;
+	private static final int WINDOW_HEIGHT = 300;
+	private static final String WINDOW_TITLE = "Student Responses";
 	
 	private int votesA = 0;
 	private int votesB = 0;
@@ -51,16 +62,25 @@ public class WebController {
 	
 	private Firestore db;
 	
+	private String instructorID = "yishai";
+	private String instructorPW = "123456";
+	
 	private String courseID = "";
 	private String sessionID = "";
 	private String pollID = "";
+	
 	private Map<String, Object> courseCategories;
+	
+	List<QueryDocumentSnapshot> users;
+	JTextField usernameBox;
+	JPasswordField passwordBox;
 	
 	public WebController(Display display) {
 		this.display = display;
 		
 		Thread t = new Thread(new Runnable() { public void run() { 
 			BasicConfigurator.configure(); // for web
+			
 			while(true) {
 				try {
 					InputStream serviceAccount = new FileInputStream("assets/serviceAccount.json"); // ### NEED TO CHANGE ###
@@ -71,42 +91,130 @@ public class WebController {
 					FirebaseApp.initializeApp(options);
 					db = FirestoreClient.getFirestore();
 					
-					ApiFuture<QuerySnapshot> query = db.collection("courses").get();
+					ApiFuture<QuerySnapshot> query = db.collection("users").get();
 					QuerySnapshot querySnapshot = query.get();
-					List<QueryDocumentSnapshot> documents = querySnapshot.getDocuments();
-					
-					for (QueryDocumentSnapshot document : documents) {
-						System.err.println(document.get("courseName"));
-						if(document.getString("courseName") != null &&
-								document.getString("courseName").contentEquals(COURSE_NAME)) {
-							courseID = document.getId();
-							pollID = document.getString("courseActivityPollID");
-							courseCategories = (HashMap<String, Object>)document.get("courseCategories");
-							System.err.println("UPDATED COURSE");
-							break;
-						}
-					}
-					
-					//temporary
-					newSession();
+					users = querySnapshot.getDocuments();
 					break;
 				} catch(Exception e) {
-					System.out.println("Failed to connect to web.");
 					e.printStackTrace();
 				}
-				
 				try {
 					Thread.sleep(500);
 				} catch(Exception e) {
 					e.printStackTrace();
 				}
 			}
+			
+			begin();
 		}});
 		t.start();
 	}
 	
+	private void begin() {
+		//Initialize displayFrame
+		JFrame displayFrame = new JFrame();
+		displayFrame.setSize(WINDOW_WIDTH, WINDOW_HEIGHT);
+		displayFrame.setTitle(WINDOW_TITLE);
+		displayFrame.setAlwaysOnTop(true);
+		displayFrame.setLayout(new BorderLayout());
+		
+		usernameBox = new JTextField(instructorID, 20);
+		
+		passwordBox = new JPasswordField(instructorPW, 20);
+		passwordBox.setEchoChar('*');
+		passwordBox.addActionListener(login);
+		
+		displayFrame.add(usernameBox);
+		displayFrame.add(passwordBox);
+		
+		//Save session on exit.
+		//displayFrame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
+		
+		// Center the display on the screen
+		displayFrame.setLocationRelativeTo(null);
+		
+		displayFrame.validate();
+		displayFrame.setVisible(true);
+	}
+	
+	private ActionListener login = new ActionListener() {
+		@Override
+		public void actionPerformed(ActionEvent e) {
+			try {
+				boolean userFound = false;
+				for (QueryDocumentSnapshot document : users) {
+					System.err.println(document.getId());
+					if(document.getId() != null &&
+							document.getId().contentEquals(instructorID) &&
+							document.getString("password").contentEquals(instructorPW)) {
+						System.err.println("USER FOUND");
+						userFound = true;
+						break;
+					}
+				}
+				
+				if(!userFound) {
+					System.err.println("No user found."); // HANDLE INCORRECT LOGIN INFORMATION
+				}
+				else {
+					// HANDLE CORRECT LOGIN INFORMATION
+					
+					//courseID = document.getId();
+					//pollID = document.getString("courseActivityPollID");
+					//courseCategories = (HashMap<String, Object>)document.get("courseCategories");
+					//temporary
+					//newSession();
+				}
+				
+			} catch(Exception err) {
+				System.out.println("Failed to connect to web.");
+				err.printStackTrace();
+			}
+		}
+	};
+	
+	private ActionListener chooseCourse = new ActionListener() {
+		@Override
+		public void actionPerformed(ActionEvent e) {
+			try {
+				ApiFuture<QuerySnapshot> query = db.collection("courses").get();
+				QuerySnapshot querySnapshot = query.get();
+				List<QueryDocumentSnapshot> documents = querySnapshot.getDocuments();
+				
+				boolean userFound = false;
+				for (QueryDocumentSnapshot document : documents) {
+					System.err.println(document.getId());
+					if(document.getId() != null &&
+							document.getId().contentEquals(instructorID) &&
+							document.getString("password").contentEquals(instructorPW)) {
+						System.err.println("USER FOUND");
+						userFound = true;
+						break;
+					}
+				}
+				
+				if(!userFound) {
+					System.err.println("No user found."); // HANDLE INCORRECT LOGIN INFORMATION
+				}
+				else {
+					// HANDLE CORRECT LOGIN INFORMATION
+					
+					//courseID = document.getId();
+					//pollID = document.getString("courseActivityPollID");
+					//courseCategories = (HashMap<String, Object>)document.get("courseCategories");
+					//temporary
+					//newSession();
+				}
+				
+			} catch(Exception err) {
+				System.out.println("Failed to connect to web.");
+				err.printStackTrace();
+			}
+		}
+	};
+	
 	public boolean newSession() {
-		if(db != null) {
+		if(!courseID.contentEquals("")) {
 			try {
 				
 				sessionID = getID();
@@ -139,7 +247,7 @@ public class WebController {
 	public void startPoll() {
 		display.nextQuestion();
 		
-		if(db != null) {
+		if(!courseID.contentEquals("")) {
 			try {
 				pollID = getID();
 				
@@ -158,8 +266,6 @@ public class WebController {
 						new EventListener<QuerySnapshot>() {
 							@Override
 							public void onEvent(QuerySnapshot snapshot, FirestoreException error) {
-								// I might need to filter out changes so that only votes
-								// from the active poll register. But prob not. Ask Litao.
 								if(error != null) {
 									System.err.println("Listen failed! " + error);
 									return;
@@ -187,7 +293,7 @@ public class WebController {
 	}
 	
 	public void stopPoll() {
-		if(db != null) {
+		if(!courseID.contentEquals("")) {
 			try {
 				pollID = "";
 				
@@ -232,7 +338,7 @@ public class WebController {
 	}
 	
 	public int[] getVotes() {
-		if(db != null) {
+		if(!courseID.contentEquals("")) {
 			try {
 				ApiFuture<QuerySnapshot> query = db.collection("poll1").get();
 				QuerySnapshot querySnapshot = query.get();
