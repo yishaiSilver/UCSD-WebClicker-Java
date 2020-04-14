@@ -5,7 +5,9 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
-import java.awt.BorderLayout;
+//import java.awt.BorderLayout;
+import java.awt.CardLayout;
+import java.awt.Dimension;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.FileInputStream;
@@ -28,14 +30,21 @@ import com.google.firebase.FirebaseOptions;
 import com.google.firebase.cloud.FirestoreClient;
 import com.google.firebase.database.annotations.Nullable;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
+import javax.swing.JButton;
+import javax.swing.JComboBox;
 import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
 import javax.swing.JPasswordField;
 import javax.swing.JTextField;
+import javax.swing.SpringLayout;
 
 import sun.misc.Unsafe;
 
@@ -62,16 +71,22 @@ public class WebController {
 	
 	private Firestore db;
 	
-	private String instructorID = "yishai";
-	private String instructorPW = "123456";
+	private String instructorID = "";
+	private String instructorPW = "";
 	
 	private String courseID = "";
 	private String sessionID = "";
 	private String pollID = "";
 	
 	private Map<String, Object> courseCategories;
-	
+
 	List<QueryDocumentSnapshot> users;
+	
+	JFrame displayFrame;
+	JPanel displayPanel;
+	JPanel loginPanel;
+	JPanel courseSelectionPanel;
+	JComboBox<String> courseSelector;
 	JTextField usernameBox;
 	JPasswordField passwordBox;
 	
@@ -112,27 +127,98 @@ public class WebController {
 	
 	private void begin() {
 		//Initialize displayFrame
-		JFrame displayFrame = new JFrame();
-		displayFrame.setSize(WINDOW_WIDTH, WINDOW_HEIGHT);
+		displayFrame = new JFrame();
 		displayFrame.setTitle(WINDOW_TITLE);
 		displayFrame.setAlwaysOnTop(true);
-		displayFrame.setLayout(new BorderLayout());
+
+
+		// initialize the actual JFrame
+		CardLayout cards = new CardLayout();
+		displayPanel = new JPanel();
+		displayPanel.setLayout(cards);
+		System.out.println(displayPanel.getLayout().getClass());
 		
+		// Initialize the login panel
+		loginPanel = new JPanel();
+		displayPanel.add(loginPanel, "Login");
+		displayFrame.add(displayPanel);
+		
+		SpringLayout layout = new SpringLayout();
+		loginPanel.setLayout(layout);
+		
+		// add the username
+		JLabel usernameLabel = new JLabel("Username: ");
+		layout.putConstraint(SpringLayout.WEST, usernameLabel, 5, SpringLayout.WEST, displayFrame);
+		layout.putConstraint(SpringLayout.NORTH, usernameLabel, 5, SpringLayout.NORTH, displayFrame);
 		usernameBox = new JTextField(instructorID, 20);
+		layout.putConstraint(SpringLayout.WEST, usernameBox, 5, SpringLayout.EAST, usernameLabel);
+		layout.putConstraint(SpringLayout.NORTH, usernameBox, 0, SpringLayout.NORTH, usernameLabel);
 		
+		// add the password
+		JLabel passwordLabel = new JLabel("Password: ");
+		layout.putConstraint(SpringLayout.WEST, passwordLabel, 6, SpringLayout.WEST, displayFrame);
+		layout.putConstraint(SpringLayout.NORTH, passwordLabel, 25, SpringLayout.NORTH, usernameBox);
 		passwordBox = new JPasswordField(instructorPW, 20);
 		passwordBox.setEchoChar('*');
 		passwordBox.addActionListener(login);
+		layout.putConstraint(SpringLayout.WEST, passwordBox, 5, SpringLayout.EAST, passwordLabel);
+		layout.putConstraint(SpringLayout.NORTH, passwordBox, 0, SpringLayout.NORTH, passwordLabel);
+
+		// add
+		loginPanel.add(usernameLabel);
+		loginPanel.add(passwordLabel);
+		loginPanel.add(usernameBox);
+		loginPanel.add(passwordBox);
+		loginPanel.validate();
+
+		// validata / initizalize coordinates
+		displayFrame.validate();
+		displayFrame.setVisible(true);
 		
-		displayFrame.add(usernameBox);
-		displayFrame.add(passwordBox);
+		// go back and add the login button to the frame (you have to do it after initializing the JFrame because otherwise you can't
+		// get the x, y coordinates of components)
+		JButton loginButton = new JButton("Login");
+		loginButton.addActionListener(login);
+		int center = (usernameLabel.getWidth() + usernameBox.getWidth() - 65 + 15) / 2; // jbutton width = 65, margin of 15
+		layout.putConstraint(SpringLayout.WEST, loginButton, center, SpringLayout.WEST, displayFrame);
+		//layout.putConstraint(SpringLayout.HORIZONTAL_CENTER, loginButton, center, SpringLayout.HORIZONTAL_CENTER, displayFrame);
+		layout.putConstraint(SpringLayout.NORTH, loginButton, 25, SpringLayout.NORTH, passwordLabel);
+		loginPanel.add(loginButton);
+		loginPanel.validate();
+	
+		// revalidate JFrame
+		displayFrame.validate();
+		displayFrame.setVisible(true);
 		
-		//Save session on exit.
-		//displayFrame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
+		
+		//add the course selection panel
+		courseSelectionPanel = new JPanel();
+		displayPanel.add(courseSelectionPanel, "Courses");
+		
+		courseSelector = new JComboBox();
+		courseSelector.setPreferredSize(new Dimension(200, 30));
+		//layout.putConstraint(SpringLayout.NORTH, courseSelector, 125, SpringLayout.NORTH, displayPanel);
+		courseSelectionPanel.add(courseSelector);
+		
+		JButton newSession = new JButton("New Session");
+		newSession.addActionListener(chooseCourse);
+		courseSelectionPanel.add(newSession);
+		
+		
+		courseSelectionPanel.validate();
+		
+		
+		// set JFrame height, width -- HEIGHT ALGORITHM IS VERY WONKY, SHOULD FIX
+		int width = usernameBox.getX() + usernameBox.getWidth() + 25;
+		int height = loginButton.getY() + loginButton.getHeight() * 3 + 5;
+		
+		// set the size of JFrame
+		displayFrame.setSize(width, height);
 		
 		// Center the display on the screen
 		displayFrame.setLocationRelativeTo(null);
 		
+		//displayFrame.pack();
 		displayFrame.validate();
 		displayFrame.setVisible(true);
 	}
@@ -140,28 +226,51 @@ public class WebController {
 	private ActionListener login = new ActionListener() {
 		@Override
 		public void actionPerformed(ActionEvent e) {
+			if(users == null) {
+				System.err.println("Not connected!");
+				//return;
+			}
+			
 			try {
+				instructorID = usernameBox.getText();
+				instructorPW = new String(passwordBox.getPassword());
+				
+				System.err.println(instructorID);
+				System.err.println(instructorPW);
+				
+				QueryDocumentSnapshot ourGuy = null;
+				
 				boolean userFound = false;
-				for (QueryDocumentSnapshot document : users) {
-					System.err.println(document.getId());
-					if(document.getId() != null &&
-							document.getId().contentEquals(instructorID) &&
-							document.getString("password").contentEquals(instructorPW)) {
-						System.err.println("USER FOUND");
-						userFound = true;
-						break;
+				if(users != null) {
+					for (QueryDocumentSnapshot document : users) {
+						System.err.println(document.getId());
+						if(document.getId() != null &&
+								document.getId().contentEquals(instructorID) &&
+								document.getString("password").contentEquals(instructorPW)) {
+							System.err.println("USER FOUND");
+							
+							ourGuy = document;
+							ArrayList<String> courses = (ArrayList<String>) document.get("courses");
+							
+							courseSelector.removeAllItems();
+							for(String s : courses) {
+								courseSelector.addItem(s);
+							}
+							
+							userFound = true;
+							break;
+						}
 					}
 				}
 				
 				if(!userFound) {
+					JOptionPane.showMessageDialog(displayFrame, "No matching user found.");
 					System.err.println("No user found."); // HANDLE INCORRECT LOGIN INFORMATION
 				}
 				else {
 					// HANDLE CORRECT LOGIN INFORMATION
-					
-					//courseID = document.getId();
-					//pollID = document.getString("courseActivityPollID");
-					//courseCategories = (HashMap<String, Object>)document.get("courseCategories");
+					CardLayout layout = (CardLayout)displayPanel.getLayout();
+					layout.show(displayPanel, "Courses");
 					//temporary
 					//newSession();
 				}
@@ -177,33 +286,29 @@ public class WebController {
 		@Override
 		public void actionPerformed(ActionEvent e) {
 			try {
+				String courseName = (String)courseSelector.getSelectedItem();
+				
 				ApiFuture<QuerySnapshot> query = db.collection("courses").get();
 				QuerySnapshot querySnapshot = query.get();
 				List<QueryDocumentSnapshot> documents = querySnapshot.getDocuments();
 				
-				boolean userFound = false;
 				for (QueryDocumentSnapshot document : documents) {
 					System.err.println(document.getId());
 					if(document.getId() != null &&
-							document.getId().contentEquals(instructorID) &&
-							document.getString("password").contentEquals(instructorPW)) {
-						System.err.println("USER FOUND");
-						userFound = true;
+							document.getString("courseName").contentEquals(courseName)) {
+						System.err.println("COURSE FOUND\n");
+						
+
+						// HANDLE CORRECT LOGIN INFORMATION
+						
+						courseID = document.getId();
+						pollID = document.getString("courseActivityPollID");
+						courseCategories = (HashMap<String, Object>)document.get("courseCategories");
+
+						displayFrame.setVisible(false);
+						newSession();
 						break;
 					}
-				}
-				
-				if(!userFound) {
-					System.err.println("No user found."); // HANDLE INCORRECT LOGIN INFORMATION
-				}
-				else {
-					// HANDLE CORRECT LOGIN INFORMATION
-					
-					//courseID = document.getId();
-					//pollID = document.getString("courseActivityPollID");
-					//courseCategories = (HashMap<String, Object>)document.get("courseCategories");
-					//temporary
-					//newSession();
 				}
 				
 			} catch(Exception err) {
