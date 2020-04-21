@@ -91,6 +91,7 @@ public class WebController {
 	JPasswordField passwordBox;
 	
 	CredentialController credController;
+	EncryptionController encrypt;
 	
 	public WebController(Display display) {
 		this.display = display;
@@ -101,6 +102,8 @@ public class WebController {
 			boolean success = false;
 			
 			try {
+				String file = "assets/serviceAccount.json";
+				//InputStream serviceAccount = this.getClass().getClassLoader().getResourceAsStream(file);
 				InputStream serviceAccount = new FileInputStream("assets/serviceAccount.json"); // ### NEED TO CHANGE ###
 				GoogleCredentials credentials = GoogleCredentials.fromStream(serviceAccount);
 				FirebaseOptions options = new FirebaseOptions.Builder()
@@ -112,6 +115,7 @@ public class WebController {
 				ApiFuture<QuerySnapshot> query = db.collection("accounts").get();
 				QuerySnapshot querySnapshot = query.get();
 				users = querySnapshot.getDocuments();
+				encrypt = new EncryptionController(users);
 				success = true;
 			} catch(Exception e) {
 				JOptionPane.showMessageDialog(displayFrame, "Failed to connect to web.");
@@ -141,7 +145,6 @@ public class WebController {
 		CardLayout cards = new CardLayout();
 		displayPanel = new JPanel();
 		displayPanel.setLayout(cards);
-		System.out.println(displayPanel.getLayout().getClass());
 		
 		// Initialize the login panel
 		loginPanel = new JPanel();
@@ -243,49 +246,34 @@ public class WebController {
 				instructorID = usernameBox.getText();
 				instructorPW = new String(passwordBox.getPassword());
 				
-				boolean userFound = false;
-				
-				// if there are users to compare to, look for the user described
-				if(users != null) {
-					// loop through all the users
-					for (QueryDocumentSnapshot document : users) {
-						//if they have our credentials
-						if(document.getId() != null &&
-								(document.getString("name").contentEquals(instructorID) ||
-										document.getString("email").contentEquals(instructorID)) &&
-								document.getString("password").contentEquals(instructorPW)) {
-							
-							// get the document id, get all the courses that have our instructor as the instructor
-							String ourGuy = document.getId();
-							ApiFuture<QuerySnapshot> query = db.collection("courses").whereEqualTo("courseInstructorID", ourGuy).get();
-							QuerySnapshot querySnapshot = query.get();
-							List<QueryDocumentSnapshot> courses = querySnapshot.getDocuments();
-							
-							// reset the course drop-down menu
-							courseSelector.removeAllItems();
-							for(QueryDocumentSnapshot course : courses) {
-								courseSelector.addItem(course.getString("courseName"));
-							}
-							
-							// break out of the loop, don't display user not found dialog
-							userFound = true;
-							break;
-						}
+				QueryDocumentSnapshot user = encrypt.authenticateUser(instructorID, instructorPW);
+					
+				if(user != null) {
+					// get the document id, get all the courses that have our instructor as the instructor
+					String ourGuy = user.getId();
+					ApiFuture<QuerySnapshot> query = db.collection("courses").whereEqualTo("courseInstructorID", ourGuy).get();
+					QuerySnapshot querySnapshot = query.get();
+					List<QueryDocumentSnapshot> courses = querySnapshot.getDocuments();
+					
+					// reset the course drop-down menu
+					courseSelector.removeAllItems();
+					for(QueryDocumentSnapshot course : courses) {
+						courseSelector.addItem(course.getString("courseName"));
 					}
-				}
-				
-				// if there was no user found, display a dialog box saying so
-				if(!userFound) {
-					JOptionPane.showMessageDialog(displayFrame, "No matching user found.");
-				}
-				else {
-					credController.saveCreds(usernameBox.getText(), passwordBox.getPassword());
+					
+					System.err.println("USER ID: " + instructorID);
+					System.err.println("USER PASS: " + encrypt.getEncryptedPassword());
+					
+					credController.saveCreds(usernameBox.getText(), encrypt.getEncryptedPassword());
 					
 					// show the course selection menu
 					CardLayout layout = (CardLayout)displayPanel.getLayout();
 					layout.show(displayPanel, "Courses");
 				}
-				
+				else {
+					// if there was no user found, display a dialog box saying so
+					JOptionPane.showMessageDialog(displayFrame, "No matching user found.");
+				}
 			} catch(Exception err) {
 				System.out.println("Failed to connect to web.");
 				err.printStackTrace();

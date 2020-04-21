@@ -12,8 +12,8 @@ public class CredentialController{
 	
 	private boolean hasFile;
 	
-	private String username;
-	private String password;
+	private String username = "";
+	private String password = "";
 	
 	private JTextField usernameBox;
 	private JPasswordField passwordBox;
@@ -23,11 +23,11 @@ public class CredentialController{
 		usernameBox = userBox;
 		passwordBox = passBox;
 		
-		File file = new File("creds.txt");
+		File file = new File("assets/creds.txt");
 		
 		if(file.exists() && !file.isDirectory()) {
 			try {
-				FileReader fileReader = new FileReader("creds.txt");
+				FileReader fileReader = new FileReader("assets/creds.txt");
 				BufferedReader bufferedReader = new BufferedReader(fileReader);
 				
 				username = bufferedReader.readLine();
@@ -59,11 +59,11 @@ public class CredentialController{
 		return password;
 	}
 	
-	public void saveCreds(String username, char[] password) {
+	public void saveCreds(String username, String encryptedPassword) {
 		try {
-			FileWriter file = new FileWriter("creds.txt");
+			FileWriter file = new FileWriter("assets/creds.txt");
 			file.write(username + "\n");
-			file.write(password);
+			file.write(encryptedPassword);
 			file.close();
 		} catch (Exception e) {
 			e.printStackTrace();
