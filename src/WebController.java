@@ -90,37 +90,42 @@ public class WebController {
 	JTextField usernameBox;
 	JPasswordField passwordBox;
 	
+	CredentialController credController;
+	
 	public WebController(Display display) {
 		this.display = display;
 		
 		Thread t = new Thread(new Runnable() { public void run() { 
 			BasicConfigurator.configure(); // for web
+		
+			boolean success = false;
 			
-			while(true) {
-				try {
-					InputStream serviceAccount = new FileInputStream("assets/serviceAccount.json"); // ### NEED TO CHANGE ###
-					GoogleCredentials credentials = GoogleCredentials.fromStream(serviceAccount);
-					FirebaseOptions options = new FirebaseOptions.Builder()
-					    .setCredentials(credentials)
-					    .build();
-					FirebaseApp.initializeApp(options);
-					db = FirestoreClient.getFirestore();
-					
-					ApiFuture<QuerySnapshot> query = db.collection("users").get();
-					QuerySnapshot querySnapshot = query.get();
-					users = querySnapshot.getDocuments();
-					break;
-				} catch(Exception e) {
-					e.printStackTrace();
-				}
-				try {
-					Thread.sleep(500);
-				} catch(Exception e) {
-					e.printStackTrace();
-				}
+			try {
+				InputStream serviceAccount = new FileInputStream("assets/serviceAccount.json"); // ### NEED TO CHANGE ###
+				GoogleCredentials credentials = GoogleCredentials.fromStream(serviceAccount);
+				FirebaseOptions options = new FirebaseOptions.Builder()
+				    .setCredentials(credentials)
+				    .build();
+				FirebaseApp.initializeApp(options);
+				db = FirestoreClient.getFirestore();
+				
+				ApiFuture<QuerySnapshot> query = db.collection("accounts").get();
+				QuerySnapshot querySnapshot = query.get();
+				users = querySnapshot.getDocuments();
+				success = true;
+			} catch(Exception e) {
+				JOptionPane.showMessageDialog(displayFrame, "Failed to connect to web.");
+				e.printStackTrace();
 			}
-			
-			begin();
+			try {
+				Thread.sleep(500);
+			} catch(Exception e) {
+				e.printStackTrace();
+			}
+				
+			if(success) {
+				begin();
+			}
 		}});
 		t.start();
 	}
@@ -221,6 +226,8 @@ public class WebController {
 		//displayFrame.pack();
 		displayFrame.validate();
 		displayFrame.setVisible(true);
+		
+		credController = new CredentialController(usernameBox, passwordBox);
 	}
 	
 	private ActionListener login = new ActionListener() {
@@ -232,47 +239,51 @@ public class WebController {
 			}
 			
 			try {
+				// get the credentials from the input boxes
 				instructorID = usernameBox.getText();
 				instructorPW = new String(passwordBox.getPassword());
 				
-				System.err.println(instructorID);
-				System.err.println(instructorPW);
-				
-				QueryDocumentSnapshot ourGuy = null;
-				
 				boolean userFound = false;
+				
+				// if there are users to compare to, look for the user described
 				if(users != null) {
+					// loop through all the users
 					for (QueryDocumentSnapshot document : users) {
-						System.err.println(document.getId());
+						//if they have our credentials
 						if(document.getId() != null &&
-								document.getId().contentEquals(instructorID) &&
+								(document.getString("name").contentEquals(instructorID) ||
+										document.getString("email").contentEquals(instructorID)) &&
 								document.getString("password").contentEquals(instructorPW)) {
-							System.err.println("USER FOUND");
 							
-							ourGuy = document;
-							ArrayList<String> courses = (ArrayList<String>) document.get("courses");
+							// get the document id, get all the courses that have our instructor as the instructor
+							String ourGuy = document.getId();
+							ApiFuture<QuerySnapshot> query = db.collection("courses").whereEqualTo("courseInstructorID", ourGuy).get();
+							QuerySnapshot querySnapshot = query.get();
+							List<QueryDocumentSnapshot> courses = querySnapshot.getDocuments();
 							
+							// reset the course drop-down menu
 							courseSelector.removeAllItems();
-							for(String s : courses) {
-								courseSelector.addItem(s);
+							for(QueryDocumentSnapshot course : courses) {
+								courseSelector.addItem(course.getString("courseName"));
 							}
 							
+							// break out of the loop, don't display user not found dialog
 							userFound = true;
 							break;
 						}
 					}
 				}
 				
+				// if there was no user found, display a dialog box saying so
 				if(!userFound) {
 					JOptionPane.showMessageDialog(displayFrame, "No matching user found.");
-					System.err.println("No user found."); // HANDLE INCORRECT LOGIN INFORMATION
 				}
 				else {
-					// HANDLE CORRECT LOGIN INFORMATION
+					credController.saveCreds(usernameBox.getText(), passwordBox.getPassword());
+					
+					// show the course selection menu
 					CardLayout layout = (CardLayout)displayPanel.getLayout();
 					layout.show(displayPanel, "Courses");
-					//temporary
-					//newSession();
 				}
 				
 			} catch(Exception err) {
@@ -296,10 +307,6 @@ public class WebController {
 					System.err.println(document.getId());
 					if(document.getId() != null &&
 							document.getString("courseName").contentEquals(courseName)) {
-						System.err.println("COURSE FOUND\n");
-						
-
-						// HANDLE CORRECT LOGIN INFORMATION
 						
 						courseID = document.getId();
 						pollID = document.getString("courseActivityPollID");
