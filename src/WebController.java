@@ -27,6 +27,7 @@ import com.google.cloud.firestore.SetOptions;
 import com.google.cloud.firestore.WriteResult;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.FirebaseOptions;
+import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.cloud.FirestoreClient;
 import com.google.firebase.database.annotations.Nullable;
 
@@ -103,13 +104,21 @@ public class WebController {
 			
 			try {
 				String file = "assets/serviceAccount.json";
+				
 				//InputStream serviceAccount = this.getClass().getClassLoader().getResourceAsStream(file);
-				InputStream serviceAccount = new FileInputStream("assets/serviceAccount.json"); // ### NEED TO CHANGE ###
+				InputStream serviceAccount = new FileInputStream("assets/javaService.json"); // ### NEED TO CHANGE ###
+				
+				// Initialize the app with a custom auth variable, limiting the server's access
+				Map<String, Object> auth = new HashMap<String, Object>();
+				auth.put("uid", "my-service-worker");
+				
 				GoogleCredentials credentials = GoogleCredentials.fromStream(serviceAccount);
 				FirebaseOptions options = new FirebaseOptions.Builder()
 				    .setCredentials(credentials)
+				    .setDatabaseAuthVariableOverride(auth)
 				    .build();
 				FirebaseApp.initializeApp(options);
+				
 				db = FirestoreClient.getFirestore();
 				
 				ApiFuture<QuerySnapshot> query = db.collection("accounts").get();
