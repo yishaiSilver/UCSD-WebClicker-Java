@@ -33,6 +33,9 @@ public class CredentialController{
 				username = bufferedReader.readLine();
 				password = bufferedReader.readLine();
 				
+				username = "instructor@ucsd.edu";
+				password = "instructor";
+				
 				System.out.println(username);
 				System.out.println(password);
 				

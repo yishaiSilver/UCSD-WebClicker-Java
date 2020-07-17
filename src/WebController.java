@@ -1,37 +1,43 @@
+import org.apache.http.NameValuePair;
+import org.apache.http.entity.*;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.client.utils.URIBuilder;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.message.BasicNameValuePair;
+import org.apache.http.util.EntityUtils;
 import org.apache.log4j.BasicConfigurator;
-import org.jsoup.Jsoup;
-import org.jsoup.helper.Validate;
-import org.jsoup.nodes.Document;
-import org.jsoup.nodes.Element;
-import org.jsoup.select.Elements;
-
+import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
+import org.bouncycastle.crypto.AsymmetricBlockCipher;
+import org.bouncycastle.crypto.digests.SHA1Digest;
+import org.bouncycastle.crypto.encodings.OAEPEncoding;
+import org.bouncycastle.crypto.engines.RSAEngine;
+import org.bouncycastle.crypto.params.AsymmetricKeyParameter;
+import org.bouncycastle.openssl.PEMParser;
+import org.bouncycastle.crypto.util.PublicKeyFactory;
 //import java.awt.BorderLayout;
 import java.awt.CardLayout;
 import java.awt.Dimension;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-
+import java.awt.event.FocusEvent;
+import java.awt.event.FocusListener;
+import java.io.StringReader;
+import java.net.URI;
 import com.google.api.core.ApiFuture;
-import com.google.auth.oauth2.GoogleCredentials;
-import com.google.cloud.firestore.DocumentChange;
-import com.google.cloud.firestore.DocumentReference;
-import com.google.cloud.firestore.EventListener;
 import com.google.cloud.firestore.Firestore;
-import com.google.cloud.firestore.FirestoreException;
 import com.google.cloud.firestore.QueryDocumentSnapshot;
 import com.google.cloud.firestore.QuerySnapshot;
 import com.google.cloud.firestore.SetOptions;
 import com.google.cloud.firestore.WriteResult;
-import com.google.firebase.FirebaseApp;
-import com.google.firebase.FirebaseOptions;
-import com.google.firebase.auth.FirebaseAuth;
-import com.google.firebase.cloud.FirestoreClient;
-import com.google.firebase.database.annotations.Nullable;
+import org.json.simple.JSONObject;
+import org.json.simple.JSONArray;
+import org.json.simple.parser.JSONParser;
 
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -47,10 +53,14 @@ import javax.swing.JPasswordField;
 import javax.swing.JTextField;
 import javax.swing.SpringLayout;
 
-import sun.misc.Unsafe;
 
 public class WebController {
-
+	
+	//-----BEGIN RSA PUBLIC KEY-----\nMIGJAoGBAMFFsiyqlCUPZ22mRb6Lfrl4WrG+XC/fVOuUg/fuksbFGVlC7Lxkk25h\nmZW1AV/JkeSQC3KWcHLqzfsJKai6kL65lGDSpJKyPl0tykpeGe2fBgEN35ZDU5D4\n8dZqrxX+sRFPVyvUEvl40dzKU7ADRS9L9B8YbKmpHRwFlEd2t8SjAgMBAAE=\n-----END RSA PUBLIC KEY-----
+	public static final String RSA_PUBLIC = "-----BEGIN RSA PUBLIC KEY-----\nMIGJAoGBAMFFsiyqlCUPZ22mRb6Lfrl4WrG+XC/fVOuUg/fuksbFGVlC7Lxkk25h\nmZW1AV/JkeSQC3KWcHLqzfsJKai6kL65lGDSpJKyPl0tykpeGe2fBgEN35ZDU5D4\n8dZqrxX+sRFPVyvUEvl40dzKU7ADRS9L9B8YbKmpHRwFlEd2t8SjAgMBAAE=\n-----END RSA PUBLIC KEY-----";
+			
+	public static final String TMP_SESSION = "2BzeQRXlWeJX2v8BsSrQ";
+	
 	public static final String COURSE_NAME = "test";
 	public static final String CHARACTERS = "0123456789"
 			+ "abcdefghijklmnopqrstuvwxyz"
@@ -72,15 +82,21 @@ public class WebController {
 	
 	private Firestore db;
 	
-	private String instructorID = "";
-	private String instructorPW = "";
+	private List<NameValuePair> courses;
 	
+	private String courseName = "";
 	private String courseID = "";
 	private String sessionID = "";
 	private String pollID = "";
 	
+	private String instructorUN = "";
+	private String instructorPW = "";
+	private String instructorID = "";
+	
 	private Map<String, Object> courseCategories;
 
+	private boolean courseSelected = false;
+	
 	List<QueryDocumentSnapshot> users;
 	
 	JFrame displayFrame;
@@ -90,55 +106,18 @@ public class WebController {
 	JComboBox<String> courseSelector;
 	JTextField usernameBox;
 	JPasswordField passwordBox;
+	JTextField lectureNumber;
 	
 	CredentialController credController;
 	EncryptionController encrypt;
 	
 	public WebController(Display display) {
 		this.display = display;
+		courses = new ArrayList<NameValuePair>();
 		
-		Thread t = new Thread(new Runnable() { public void run() { 
-			BasicConfigurator.configure(); // for web
-		
-			boolean success = false;
-			
-			try {
-				String file = "assets/serviceAccount.json";
-				
-				//InputStream serviceAccount = this.getClass().getClassLoader().getResourceAsStream(file);
-				InputStream serviceAccount = new FileInputStream("assets/javaService.json"); // ### NEED TO CHANGE ###
-				
-				// Initialize the app with a custom auth variable, limiting the server's access
-				Map<String, Object> auth = new HashMap<String, Object>();
-				auth.put("uid", "my-service-worker");
-				
-				GoogleCredentials credentials = GoogleCredentials.fromStream(serviceAccount);
-				FirebaseOptions options = new FirebaseOptions.Builder()
-				    .setCredentials(credentials)
-				    .setDatabaseAuthVariableOverride(auth)
-				    .build();
-				FirebaseApp.initializeApp(options);
-				
-				db = FirestoreClient.getFirestore();
-				
-				ApiFuture<QuerySnapshot> query = db.collection("accounts").get();
-				QuerySnapshot querySnapshot = query.get();
-				users = querySnapshot.getDocuments();
-				encrypt = new EncryptionController(users);
-				success = true;
-			} catch(Exception e) {
-				JOptionPane.showMessageDialog(displayFrame, "Failed to connect to web.");
-				e.printStackTrace();
-			}
-			try {
-				Thread.sleep(500);
-			} catch(Exception e) {
-				e.printStackTrace();
-			}
-				
-			if(success) {
-				begin();
-			}
+		Thread t = new Thread(new Runnable() { public void run() {
+			BasicConfigurator.configure();
+			begin();
 		}});
 		t.start();
 	}
@@ -166,8 +145,8 @@ public class WebController {
 		// add the username
 		JLabel usernameLabel = new JLabel("Username: ");
 		layout.putConstraint(SpringLayout.WEST, usernameLabel, 5, SpringLayout.WEST, displayFrame);
-		layout.putConstraint(SpringLayout.NORTH, usernameLabel, 5, SpringLayout.NORTH, displayFrame);
-		usernameBox = new JTextField(instructorID, 20);
+		layout.putConstraint(SpringLayout.NORTH, usernameLabel, 10, SpringLayout.NORTH, displayFrame);
+		usernameBox = new JTextField(instructorUN, 20);
 		layout.putConstraint(SpringLayout.WEST, usernameBox, 5, SpringLayout.EAST, usernameLabel);
 		layout.putConstraint(SpringLayout.NORTH, usernameBox, 0, SpringLayout.NORTH, usernameLabel);
 		
@@ -178,6 +157,15 @@ public class WebController {
 		passwordBox = new JPasswordField(instructorPW, 20);
 		passwordBox.setEchoChar('*');
 		passwordBox.addActionListener(login);
+		passwordBox.addFocusListener(new FocusListener() {
+			@Override 
+			public void focusLost(final FocusEvent pE) {}
+            
+			@Override 
+			public void focusGained(final FocusEvent pE) {
+				passwordBox.selectAll();
+            }
+		});
 		layout.putConstraint(SpringLayout.WEST, passwordBox, 5, SpringLayout.EAST, passwordLabel);
 		layout.putConstraint(SpringLayout.NORTH, passwordBox, 0, SpringLayout.NORTH, passwordLabel);
 
@@ -210,6 +198,7 @@ public class WebController {
 		
 		//add the course selection panel
 		courseSelectionPanel = new JPanel();
+	
 		displayPanel.add(courseSelectionPanel, "Courses");
 		
 		courseSelector = new JComboBox();
@@ -217,17 +206,31 @@ public class WebController {
 		//layout.putConstraint(SpringLayout.NORTH, courseSelector, 125, SpringLayout.NORTH, displayPanel);
 		courseSelectionPanel.add(courseSelector);
 		
+		// add the lecture number input field
+		JLabel lectureLabel = new JLabel("Lecture Number: ");
+		lectureNumber = new JTextField("0", 9);
+		lectureNumber.addFocusListener(new FocusListener() {
+			@Override 
+			public void focusLost(final FocusEvent pE) {}
+            
+			@Override 
+			public void focusGained(final FocusEvent pE) {
+                lectureNumber.selectAll();
+            }
+		});
+		courseSelectionPanel.add(lectureLabel);
+		courseSelectionPanel.add(lectureNumber);
+		
+		// add new session button
 		JButton newSession = new JButton("New Session");
 		newSession.addActionListener(chooseCourse);
 		courseSelectionPanel.add(newSession);
 		
-		
 		courseSelectionPanel.validate();
-		
-		
+		 
 		// set JFrame height, width -- HEIGHT ALGORITHM IS VERY WONKY, SHOULD FIX
 		int width = usernameBox.getX() + usernameBox.getWidth() + 25;
-		int height = loginButton.getY() + loginButton.getHeight() * 3 + 5;
+		int height = loginButton.getY() + loginButton.getHeight() * 3 + 10;
 		
 		// set the size of JFrame
 		displayFrame.setSize(width, height);
@@ -242,47 +245,90 @@ public class WebController {
 		credController = new CredentialController(usernameBox, passwordBox);
 	}
 	
+	/*
+	 * A lot of this code was taken from this tutorial: 
+	 * https://www.baeldung.com/httpurlconnection-post
+	 */
+	private boolean login(String username, String password) {
+		try {
+			// Establish connection
+			CloseableHttpClient httpClient = HttpClients.createDefault();
+			HttpPost httpPost = new HttpPost("http://54.153.95.213:3001/login");
+			httpPost.setHeader("Accept", "application/json");
+			httpPost.setHeader("Content-type", "application/json");
+			
+			// Create json packet
+			String toSend = "{\"email\": \"" + username + "\", \"password\": \""
+					+ getEncrypted(password) + "\"}";
+			StringEntity stringEntity = new StringEntity(toSend);
+			System.out.println(toSend);
+			httpPost.setEntity(stringEntity);
+			
+			// send the packet
+			CloseableHttpResponse httpResponse = httpClient.execute(httpPost);
+			
+			String response = EntityUtils.toString(httpResponse.getEntity());
+			
+			System.out.println(response);
+		      
+			// https://www.tutorialspoint.com/json/json_java_example.htm
+			JSONParser parser = new JSONParser();
+			
+			JSONObject full = (JSONObject) parser.parse(response);
+			
+			boolean success = (boolean) full.get("success");
+			
+			if(success) {
+				JSONObject data = (JSONObject) full.get("data");
+				JSONArray courses = (JSONArray) data.get("courses");
+				
+				JSONObject account = (JSONObject) data.get("account");
+				instructorID = (String) account.get("accountID");
+				
+				courseSelector.removeAllItems();
+				for(int i = 0; i < courses.size(); i ++) {
+					Object obj = courses.get(i);
+					
+					System.out.println(obj.getClass());
+					// only look at JSONObjects
+					if(!obj.getClass().equals(data.getClass())) {
+						break;
+					}
+					
+					JSONObject course = (JSONObject) obj;
+					
+					System.out.println(course.get("courseName"));
+					
+					String courseName = (String) course.get("courseName");
+					String courseID = (String) course.get("courseID");
+					NameValuePair coursePair = new BasicNameValuePair(courseName, courseID);
+					courses.add(coursePair);
+					
+					courseSelector.addItem(courseName);
+					
+				}
+				
+				// show the course selection menu
+				CardLayout layout = (CardLayout)displayPanel.getLayout();
+				layout.show(displayPanel, "Courses");
+			}
+			httpClient.close();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return false;
+	}
+	
 	private ActionListener login = new ActionListener() {
 		@Override
 		public void actionPerformed(ActionEvent e) {
-			if(users == null) {
-				System.err.println("Not connected!");
-				//return;
-			}
-			
 			try {
 				// get the credentials from the input boxes
-				instructorID = usernameBox.getText();
+				instructorUN = usernameBox.getText();
 				instructorPW = new String(passwordBox.getPassword());
 				
-				QueryDocumentSnapshot user = encrypt.authenticateUser(instructorID, instructorPW);
-					
-				if(user != null) {
-					// get the document id, get all the courses that have our instructor as the instructor
-					String ourGuy = user.getId();
-					ApiFuture<QuerySnapshot> query = db.collection("courses").whereEqualTo("courseInstructorID", ourGuy).get();
-					QuerySnapshot querySnapshot = query.get();
-					List<QueryDocumentSnapshot> courses = querySnapshot.getDocuments();
-					
-					// reset the course drop-down menu
-					courseSelector.removeAllItems();
-					for(QueryDocumentSnapshot course : courses) {
-						courseSelector.addItem(course.getString("courseName"));
-					}
-					
-					System.err.println("USER ID: " + instructorID);
-					System.err.println("USER PASS: " + encrypt.getEncryptedPassword());
-					
-					credController.saveCreds(usernameBox.getText(), encrypt.getEncryptedPassword());
-					
-					// show the course selection menu
-					CardLayout layout = (CardLayout)displayPanel.getLayout();
-					layout.show(displayPanel, "Courses");
-				}
-				else {
-					// if there was no user found, display a dialog box saying so
-					JOptionPane.showMessageDialog(displayFrame, "No matching user found.");
-				}
+				login(instructorUN, instructorPW);
+				
 			} catch(Exception err) {
 				System.out.println("Failed to connect to web.");
 				err.printStackTrace();
@@ -293,128 +339,225 @@ public class WebController {
 	private ActionListener chooseCourse = new ActionListener() {
 		@Override
 		public void actionPerformed(ActionEvent e) {
-			try {
-				String courseName = (String)courseSelector.getSelectedItem();
-				
-				ApiFuture<QuerySnapshot> query = db.collection("courses").get();
-				QuerySnapshot querySnapshot = query.get();
-				List<QueryDocumentSnapshot> documents = querySnapshot.getDocuments();
-				
-				for (QueryDocumentSnapshot document : documents) {
-					System.err.println(document.getId());
-					if(document.getId() != null &&
-							document.getString("courseName").contentEquals(courseName)) {
-						
-						courseID = document.getId();
-						pollID = document.getString("courseActivityPollID");
-						courseCategories = (HashMap<String, Object>)document.get("courseCategories");
-
-						displayFrame.setVisible(false);
-						newSession();
-						break;
-					}
+			courseName = (String)courseSelector.getSelectedItem();
+			
+			for(NameValuePair course : courses) {
+				if(course.getName().equals(courseName)) {
+					courseID = course.getValue();
+					break;
 				}
-				
-			} catch(Exception err) {
-				System.out.println("Failed to connect to web.");
-				err.printStackTrace();
 			}
+			
+			courseSelected = true;
+			
+			createSession();
+			displayFrame.setVisible(false);
 		}
 	};
 	
-	public boolean newSession() {
-		if(!courseID.contentEquals("")) {
-			try {
-				
-				sessionID = getID();
-				
-				Map<String, Object> docData = new HashMap<>();
-				docData.put("sessionCourseID", courseID);
-				docData.put("sessionStartTime", System.currentTimeMillis());
-				ApiFuture<WriteResult> future = db.collection("sessions").document(sessionID).set(docData);
-				
-				ApiFuture<QuerySnapshot> query = db.collection("sessions").get();
-				QuerySnapshot querySnapshot = query.get();
-				List<QueryDocumentSnapshot> documents = querySnapshot.getDocuments();
-				
-				docData = new HashMap<>();
-				docData.put("courseActivitySessionID", sessionID);
-				future = db.collection("courses").document(courseID).set(docData, SetOptions.merge());
-				
-				System.err.println("SESSION STARTED");
-				
-				return true;
-				
-			} catch (Exception e) {
-				e.printStackTrace();
-			}
+	public void createPoll() {
+		try {
+			display.nextQuestion();
+			
+			List<NameValuePair> params = new ArrayList<NameValuePair>();
+			
+			params.add(new BasicNameValuePair("pollStartTime", "" + System.currentTimeMillis()));
+			params.add(new BasicNameValuePair("pollSessionID", "" + TMP_SESSION));
+			
+			URI uri = new URIBuilder()
+					.setScheme("http")
+					.setHost("54.153.95.213")
+					.setPort(3001)
+					.setPath("/createPoll")
+					.addParameters(params)
+					.build();
+			
+			CloseableHttpClient httpClient = HttpClients.createDefault();
+			HttpGet httpGet = new HttpGet(uri);
+			
+			CloseableHttpResponse httpResponse = httpClient.execute(httpGet);
+			
+			String response = EntityUtils.toString(httpResponse.getEntity());
+			
+			System.out.println(response);
+		      
+			// https://www.tutorialspoint.com/json/json_java_example.htm
+			JSONParser parser = new JSONParser();
+			
+			JSONObject arr = (JSONObject)parser.parse(response);
+			JSONObject obj = (JSONObject)arr.get("data");
+			
+			pollID = (String)obj.get("pollID");
+			
+			System.out.println(pollID);
+			
+			httpClient.close();
+			
+			resetVotes();
+		} catch (Exception e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
 		}
-		
-		return false;
 	}
 	
-	public void startPoll() {
-		display.nextQuestion();
-		
-		if(!courseID.contentEquals("")) {
-			try {
-				pollID = getID();
-				
-				Map<String, Object> docData = new HashMap<>();
-				docData.put("pollCategories", courseCategories);
-				docData.put("pollSessionID", sessionID);
-				docData.put("pollStartTime", System.currentTimeMillis());
-				ApiFuture<WriteResult> future = db.collection("polls").document(pollID).set(docData);
-				
-				docData = new HashMap<>();
-				docData.put("courseActivityPollID", pollID);
-				future = db.collection("courses").document(courseID).set(docData, SetOptions.merge());
-				
-				System.err.println(pollID);
-				db.collection("polls").document(pollID).collection("students").addSnapshotListener(
-						new EventListener<QuerySnapshot>() {
-							@Override
-							public void onEvent(QuerySnapshot snapshot, FirestoreException error) {
-								if(error != null) {
-									System.err.println("Listen failed! " + error);
-									return;
-								}
-								
-								if(snapshot != null && !snapshot.getDocumentChanges().isEmpty()) {
-									System.err.println(snapshot.getDocumentChanges());
-									List<DocumentChange> changes = snapshot.getDocumentChanges();
-									for(DocumentChange change : changes) {
-										QueryDocumentSnapshot doc = change.getDocument();
-										
-										String vote = doc.getString("vote");
-										display.newResponse(doc.getId(), vote);
-										//parseVote((String)doc.get("vote"));
-									}
-								}
-							}
-						});
-				
-			} catch (Exception e) {
-				e.printStackTrace();
-			}
+	public void activatePoll() {
+		try {
+			List<NameValuePair> params = new ArrayList<NameValuePair>();
+			
+			params.add(new BasicNameValuePair("pollID", pollID));
+			
+			URI uri = new URIBuilder()
+					.setScheme("http")
+					.setHost("54.153.95.213")
+					.setPort(3001)
+					.setPath("/activatePoll")
+					.addParameters(params)
+					.build();
+			
+			CloseableHttpClient httpClient = HttpClients.createDefault();
+			HttpGet httpGet = new HttpGet(uri);
+			
+			CloseableHttpResponse httpResponse = httpClient.execute(httpGet);
+			
+			System.out.println(EntityUtils.toString(httpResponse.getEntity()));
+			System.out.println(httpResponse.getStatusLine());
+			
+			httpClient.close();
+			
+		} catch (Exception e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
 		}
-		resetVotes();
 	}
 	
-	public void stopPoll() {
-		if(!courseID.contentEquals("")) {
-			try {
-				pollID = "";
-				
-				DocumentReference docRef = db.collection("courses").document(courseID);
-				Map<String, Object> data = new HashMap<>();
-				data.put("courseActivityPollID", pollID);
-				ApiFuture<WriteResult> result = docRef.set(data, SetOptions.merge());
-				
-			} catch (Exception e) {
-				System.out.println("Error stopping poll through web");
-				//e.printStackTrace();
-			}
+	public void deactivatePoll() {
+		try {
+			List<NameValuePair> params = new ArrayList<NameValuePair>();
+			
+			params.add(new BasicNameValuePair("pollID", pollID));
+			
+			URI uri = new URIBuilder()
+					.setScheme("http")
+					.setHost("54.153.95.213")
+					.setPort(3001)
+					.setPath("/deactivatePoll")
+					.addParameters(params)
+					.build();
+			
+			CloseableHttpClient httpClient = HttpClients.createDefault();
+			HttpGet httpGet = new HttpGet(uri);
+			
+			CloseableHttpResponse httpResponse = httpClient.execute(httpGet);
+			
+			System.out.println(EntityUtils.toString(httpResponse.getEntity()));
+			System.out.println(httpResponse.getStatusLine());
+			
+			httpClient.close(); 
+			
+		} catch (Exception e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	}
+	
+	public void createSession() {
+		try {
+			List<NameValuePair> params = new ArrayList<NameValuePair>();
+			
+			params.add(new BasicNameValuePair("sessionStartTime", "" + System.currentTimeMillis()));
+			params.add(new BasicNameValuePair("sessionCourseID", courseID));
+			
+			URI uri = new URIBuilder()
+					.setScheme("http")
+					.setHost("54.153.95.213")
+					.setPort(3001)
+					.setPath("/createSession")
+					.addParameters(params)
+					.build();
+			
+			CloseableHttpClient httpClient = HttpClients.createDefault();
+			HttpGet httpGet = new HttpGet(uri);
+			
+			CloseableHttpResponse httpResponse = httpClient.execute(httpGet);
+			
+			String response = EntityUtils.toString(httpResponse.getEntity());
+			
+			System.out.println(response);
+		      
+			// https://www.tutorialspoint.com/json/json_java_example.htm
+			JSONParser parser = new JSONParser();
+			
+			JSONObject arr = (JSONObject)parser.parse(response);
+			JSONObject obj = (JSONObject)arr.get("data");
+			
+			sessionID = (String)obj.get("sessionID");
+			
+			System.out.println(sessionID);
+			
+			httpClient.close();
+		} catch (Exception e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	}
+	
+	public void activateSession() {
+		try {
+			List<NameValuePair> params = new ArrayList<NameValuePair>();
+			
+			params.add(new BasicNameValuePair("sessionID", sessionID));
+			
+			URI uri = new URIBuilder()
+					.setScheme("http")
+					.setHost("54.153.95.213")
+					.setPort(3001)
+					.setPath("/activateSession")
+					.addParameters(params)
+					.build();
+			
+			CloseableHttpClient httpClient = HttpClients.createDefault();
+			HttpGet httpGet = new HttpGet(uri);
+			
+			CloseableHttpResponse httpResponse = httpClient.execute(httpGet);
+			
+			System.out.println(EntityUtils.toString(httpResponse.getEntity()));
+			System.out.println(httpResponse.getStatusLine());
+			
+			httpClient.close();
+			
+		} catch (Exception e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	}
+
+	public void deactivateSession() {
+		try {
+			List<NameValuePair> params = new ArrayList<NameValuePair>();
+			
+			params.add(new BasicNameValuePair("sessionID", sessionID));
+			
+			URI uri = new URIBuilder()
+					.setScheme("http")
+					.setHost("54.153.95.213")
+					.setPort(3001)
+					.setPath("/deactivateSession")
+					.addParameters(params)
+					.build();
+			
+			CloseableHttpClient httpClient = HttpClients.createDefault();
+			HttpGet httpGet = new HttpGet(uri);
+			
+			CloseableHttpResponse httpResponse = httpClient.execute(httpGet);
+			
+			System.out.println(EntityUtils.toString(httpResponse.getEntity()));
+			System.out.println(httpResponse.getStatusLine());
+			
+			httpClient.close(); 
+			
+		} catch (Exception e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
 		}
 	}
 	
@@ -447,34 +590,44 @@ public class WebController {
 	}
 	
 	public int[] getVotes() {
-		if(!courseID.contentEquals("")) {
-			try {
-				ApiFuture<QuerySnapshot> query = db.collection("poll1").get();
-				QuerySnapshot querySnapshot = query.get();
-				List<QueryDocumentSnapshot> documents = querySnapshot.getDocuments();
-				
-				for (QueryDocumentSnapshot document : documents) {
-					switch(document.getString("vote")) {
-						case "a":
-							votesA++;
-							break;
-						case "b":
-							votesB++;
-							break;
-						case "c":
-							votesC++;
-							break;
-						case "d":
-							votesD++;
-							break;
-						case "e":
-							votesE++;
-							break;
-					}
+		try {
+			List<NameValuePair> params = new ArrayList<NameValuePair>();
+			
+			params.add(new BasicNameValuePair("pollID", pollID));
+			
+			URI uri = new URIBuilder()
+					.setScheme("http")
+					.setHost("54.153.95.213")
+					.setPort(3001)
+					.setPath("/getPollData")
+					.addParameters(params)
+					.build();
+			
+			CloseableHttpClient httpClient = HttpClients.createDefault();
+			HttpGet httpGet = new HttpGet(uri);
+			
+			CloseableHttpResponse httpResponse = httpClient.execute(httpGet);
+			
+			String response = EntityUtils.toString(httpResponse.getEntity());
+			
+			System.err.println(response);
+		      
+			// https://www.tutorialspoint.com/json/json_java_example.htm
+			JSONParser parser = new JSONParser();
+			
+			JSONObject obj = (JSONObject)parser.parse(response);
+			JSONArray arr = (JSONArray)obj.get("votes");
+			
+			if(arr != null) {
+				for(int i = 0; i < arr.size(); i++) {
+					JSONObject iObj = (JSONObject)arr.get(i);
+					System.out.println(iObj.get("vote"));
 				}
-			} catch (Exception e) {
-				e.printStackTrace();
 			}
+			
+			httpClient.close();
+		} catch(Exception e) {
+			e.printStackTrace();
 		}
 		
 		allVotes = new int[] {votesA, votesB, votesC, votesD, votesE};
@@ -486,18 +639,19 @@ public class WebController {
 	}	
 	
 	public String getID() {
-		String id = "";
-		for(int i = 0; i < ID_LENGTH; i ++) {
-			Random rand = new Random();
-			int index = rand.nextInt(CHARACTERS.length());
-			id = id + CHARACTERS.charAt(index);
-		}
-		System.err.println(id);
-		return id;
+		return instructorID;
 	}
 	
-	public boolean isConnected() {
-		return db != null;
+	public String getSelectedCourse() {
+		return courseName;
+	}
+	
+	public boolean isCourseSelected() {
+		return courseSelected;
+	}
+	
+	public String getLectureNumber() {
+		return lectureNumber.getText();
 	}
 	
 	public void newVote(String id) {
@@ -510,5 +664,41 @@ public class WebController {
 		docData = new HashMap<>();
 		docData.put("courseActivityPollID", pollID);
 		future = db.collection("courses").document(courseID).set(docData, SetOptions.merge());
+	}
+	
+	/*
+	 * so many problems. so many. how to interpret unsupported key, how to fix padding 
+	 * issue, etc. Alex pointed me to BouncyCastle, which solved the key problem. And
+	 * I found this stackoverflow post which helped solve the OEAP padding problem:
+	 * https://stackoverflow.com/questions/46916718/oaep-padding-error-when-decrypting-data-in-c-sharp-that-was-encrypted-in-javascr
+	 */
+	public String getEncrypted(String data) {
+		String out = "";
+		
+		try {
+			byte[] bytes = data.getBytes();
+			
+			// read information for key
+			StringReader keyReader = new StringReader(RSA_PUBLIC);
+			PEMParser parser = new PEMParser(keyReader);
+			SubjectPublicKeyInfo keyInfo = (SubjectPublicKeyInfo) parser.readObject();
+
+			// create the key
+			AsymmetricKeyParameter param = PublicKeyFactory.createKey(keyInfo);
+			
+			// create a cipher using the key
+			AsymmetricBlockCipher engine = new OAEPEncoding(new RSAEngine(), new SHA1Digest());
+			engine.init(true, param);
+			
+			// use cipher on given data
+			byte[] encrypted = engine.processBlock(bytes, 0, bytes.length);
+			
+			// return encrypted version of data
+			out = new String(Base64.getEncoder().encode(encrypted));
+		} catch(Exception e) {
+			e.printStackTrace();
+		}
+		
+		return out;
 	}
 }

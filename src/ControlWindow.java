@@ -27,7 +27,7 @@ public class ControlWindow extends JFrame {
 	//The JFrame used to display everything and its characteristics
 	private static JFrame displayFrame;
 	private static final int WINDOW_WIDTH = 250;
-	private static final int WINDOW_HEIGHT = 75;
+	private static final int WINDOW_HEIGHT = 85;
 	private static final String WINDOW_TITLE = "PiClicker";
 
 	public static final int BEGIN_POLL_BUTTON = 0;
@@ -135,14 +135,23 @@ public class ControlWindow extends JFrame {
 		public void actionPerformed(ActionEvent e) {
 			if(shouldStart) {
 				usb.startPoll();
-				web.startPoll();
 				
+//				web.createSession();
+//				web.activateSession();
+				
+				web.createPoll();
+				web.activatePoll();
+		
 				setStartStopText("Stop");
 				numResponsesText.setText("0");
 			}
 			else {
 				usb.stopPoll();
-				web.stopPoll();
+				
+				web.getVotes();
+				web.deactivatePoll();
+				
+//				web.deactivateSession();
 				
 				setStartStopText("Start");
 				numResponsesText.setText("-");
