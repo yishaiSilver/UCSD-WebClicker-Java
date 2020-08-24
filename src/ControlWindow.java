@@ -139,8 +139,8 @@ public class ControlWindow extends JFrame {
 //				web.createSession();
 //				web.activateSession();
 				
-				web.createPoll();
-				web.activatePoll();
+//				web.createPoll();
+//				web.activatePoll();
 		
 				setStartStopText("Stop");
 				numResponsesText.setText("0");
@@ -148,9 +148,9 @@ public class ControlWindow extends JFrame {
 			else {
 				usb.stopPoll();
 				
-				web.getVotes();
-				web.deactivatePoll();
-				
+//				web.getVotes();
+//				web.deactivatePoll();
+//				
 //				web.deactivateSession();
 				
 				setStartStopText("Start");

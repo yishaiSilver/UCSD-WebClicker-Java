@@ -12,9 +12,10 @@ public class KeyLogger implements Runnable {
 	private WebController web;
 	public VoteStatus votes;
 	public String imageUploadSite, lecture, courseName, instructorID;
+	public int slideNum;
 
 	public KeyLogger(Display display, USBController usb, WebController web, VoteStatus votes, String imageUploadSite,
-			String lecture, String courseName, String instructorID) {
+			String lecture, int slideNum, String courseName, String instructorID) {
 		this.display = display;
 		this.usb = usb;
 		this.web = web;
@@ -23,15 +24,16 @@ public class KeyLogger implements Runnable {
 		this.lecture = lecture;
 		this.courseName = courseName;
 		this.instructorID = instructorID;
+		this.slideNum = slideNum;
 
 	}
 
 	public void run() {
 		
-		KeyLoggerHelper h = new KeyLoggerHelper(display, usb, web, votes, imageUploadSite, lecture, courseName,
-				instructorID);
 		File file = new File("screenshots/");
 		file.mkdir();
+		KeyLoggerHelper h = new KeyLoggerHelper(display, usb, web, votes, imageUploadSite, lecture, slideNum, courseName,
+				instructorID);
 		h.startHotKeys();
 
 	}

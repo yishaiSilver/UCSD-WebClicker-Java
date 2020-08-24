@@ -82,11 +82,13 @@ public class WebController {
 	
 	private Firestore db;
 	
-	private List<NameValuePair> courses;
+	private ArrayList<NameValuePair> courses;
 	
 	private String courseName = "";
 	private String courseID = "";
 	private String sessionID = "";
+	private long sessionNum;
+	private long slideCount;
 	private String pollID = "";
 	
 	private String instructorUN = "";
@@ -106,20 +108,20 @@ public class WebController {
 	JComboBox<String> courseSelector;
 	JTextField usernameBox;
 	JPasswordField passwordBox;
-	JTextField lectureNumber;
+//	JTextField sessionNumber;
 	
 	CredentialController credController;
 	EncryptionController encrypt;
 	
 	public WebController(Display display) {
-		this.display = display;
-		courses = new ArrayList<NameValuePair>();
-		
-		Thread t = new Thread(new Runnable() { public void run() {
-			BasicConfigurator.configure();
-			begin();
-		}});
-		t.start();
+//		this.display = display;
+//		courses = new ArrayList<NameValuePair>();
+//		
+//		Thread t = new Thread(new Runnable() { public void run() {
+//			BasicConfigurator.configure();
+//			begin();
+//		}});
+//		t.start();
 	}
 	
 	private void begin() {
@@ -201,30 +203,36 @@ public class WebController {
 	
 		displayPanel.add(courseSelectionPanel, "Courses");
 		
-		courseSelector = new JComboBox();
+		courseSelector = new JComboBox<String>();
 		courseSelector.setPreferredSize(new Dimension(200, 30));
-		//layout.putConstraint(SpringLayout.NORTH, courseSelector, 125, SpringLayout.NORTH, displayPanel);
+		layout.putConstraint(SpringLayout.NORTH, courseSelector, 50, SpringLayout.NORTH, courseSelectionPanel);
 		courseSelectionPanel.add(courseSelector);
 		
-		// add the lecture number input field
-		JLabel lectureLabel = new JLabel("Lecture Number: ");
-		lectureNumber = new JTextField("0", 9);
-		lectureNumber.addFocusListener(new FocusListener() {
-			@Override 
-			public void focusLost(final FocusEvent pE) {}
-            
-			@Override 
-			public void focusGained(final FocusEvent pE) {
-                lectureNumber.selectAll();
-            }
-		});
-		courseSelectionPanel.add(lectureLabel);
-		courseSelectionPanel.add(lectureNumber);
-		
+//		// add the lecture number input field
+//		JLabel lectureLabel = new JLabel("Lecture Number: ");
+//		lectureNumber = new JTextField("0", 9);
+//		lectureNumber.addFocusListener(new FocusListener() {
+//			@Override 
+//			public void focusLost(final FocusEvent pE) {}
+//            
+//			@Override 
+//			public void focusGained(final FocusEvent pE) {
+//                lectureNumber.selectAll();
+//            }
+//		});
+//		courseSelectionPanel.add(lectureLabel);
+//		courseSelectionPanel.add(lectureNumber);
+
 		// add new session button
-		JButton newSession = new JButton("New Session");
-		newSession.addActionListener(chooseCourse);
-		courseSelectionPanel.add(newSession);
+		JButton resumeSessionButton = new JButton("Resume Session");
+		resumeSessionButton.addActionListener(resumeSession);
+		courseSelectionPanel.add(resumeSessionButton);
+
+		// add new session button
+		JButton newSessionButton = new JButton("New Session");
+		newSessionButton.addActionListener(newSession);
+		courseSelectionPanel.add(newSessionButton);
+		
 		
 		courseSelectionPanel.validate();
 		 
@@ -280,24 +288,21 @@ public class WebController {
 			
 			if(success) {
 				JSONObject data = (JSONObject) full.get("data");
-				JSONArray courses = (JSONArray) data.get("courses");
+				JSONArray JSONCourses = (JSONArray) data.get("courses");
 				
 				JSONObject account = (JSONObject) data.get("account");
 				instructorID = (String) account.get("accountID");
 				
 				courseSelector.removeAllItems();
-				for(int i = 0; i < courses.size(); i ++) {
-					Object obj = courses.get(i);
+				for(int i = 0; i < JSONCourses.size(); i ++) {
+					Object obj = JSONCourses.get(i);
 					
-					System.out.println(obj.getClass());
 					// only look at JSONObjects
 					if(!obj.getClass().equals(data.getClass())) {
 						break;
 					}
 					
 					JSONObject course = (JSONObject) obj;
-					
-					System.out.println(course.get("courseName"));
 					
 					String courseName = (String) course.get("courseName");
 					String courseID = (String) course.get("courseID");
@@ -351,6 +356,52 @@ public class WebController {
 			courseSelected = true;
 			
 			createSession();
+			displayFrame.setVisible(false);
+		}
+	};
+	
+	private ActionListener newSession = new ActionListener() {
+		@Override
+		public void actionPerformed(ActionEvent e) {
+			courseName = (String)courseSelector.getSelectedItem();
+//			System.err.println("CourseName: " + courseName);
+			
+//			System.err.println("num courses: " + courses.size());
+			for(NameValuePair course : courses) {
+//				System.err.println("CourseName: " + course.getName());
+				
+				if(course.getName().equals(courseName)) {
+					courseID = course.getValue();
+					break;
+				}
+			}
+			
+			courseSelected = true;
+//			System.err.println("CourseID: " + courseID);
+			
+			createSession();
+			activateSession();
+			displayFrame.setVisible(false);
+		}
+	};
+	
+	private ActionListener resumeSession = new ActionListener() {
+		@Override
+		public void actionPerformed(ActionEvent e) {
+			courseName = (String)courseSelector.getSelectedItem();
+//			System.err.println("CourseName: " + courseName);
+			
+			for(NameValuePair course : courses) {
+				if(course.getName().equals(courseName)) {
+					courseID = course.getValue();
+					break;
+				}
+			}
+			
+			courseSelected = true;
+//			System.err.println("CourseID: " + courseID);
+			
+			resumeSession();
 			displayFrame.setVisible(false);
 		}
 	};
@@ -463,7 +514,8 @@ public class WebController {
 	public void createSession() {
 		try {
 			List<NameValuePair> params = new ArrayList<NameValuePair>();
-			
+
+			System.err.println("CourseID: " + courseID);
 			params.add(new BasicNameValuePair("sessionStartTime", "" + System.currentTimeMillis()));
 			params.add(new BasicNameValuePair("sessionCourseID", courseID));
 			
@@ -491,6 +543,52 @@ public class WebController {
 			JSONObject obj = (JSONObject)arr.get("data");
 			
 			sessionID = (String)obj.get("sessionID");
+			sessionNum = (long)obj.get("sessionNum");
+			slideCount = (long) 0;
+			
+			System.out.println(sessionID);
+			
+			httpClient.close();
+		} catch (Exception e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	}
+	
+	public void resumeSession() {
+		try {
+			List<NameValuePair> params = new ArrayList<NameValuePair>();
+			
+			params.add(new BasicNameValuePair("courseID", courseID));
+			
+			URI uri = new URIBuilder()
+					.setScheme("http")
+					.setHost("54.153.95.213")
+					.setPort(3001)
+					.setPath("/resumeSession")
+					.addParameters(params)
+					.build();
+			
+			CloseableHttpClient httpClient = HttpClients.createDefault();
+			HttpGet httpGet = new HttpGet(uri);
+			
+			CloseableHttpResponse httpResponse = httpClient.execute(httpGet);
+			
+			String response = EntityUtils.toString(httpResponse.getEntity());
+
+			System.err.println("CourseID: " + courseID);
+			System.out.println(response);
+		      
+			// https://www.tutorialspoint.com/json/json_java_example.htm
+			JSONParser parser = new JSONParser();
+			
+			JSONObject arr = (JSONObject)parser.parse(response);
+//			JSONObject obj = (JSONObject)arr.get("data");
+			
+			sessionID = (String)arr.get("sessionID");
+			sessionNum = (long)arr.get("sessionNum");
+			slideCount = (long)arr.get("slideCount");
+			
 			
 			System.out.println(sessionID);
 			
@@ -650,8 +748,12 @@ public class WebController {
 		return courseSelected;
 	}
 	
-	public String getLectureNumber() {
-		return lectureNumber.getText();
+	public long getSessionNumber() {
+		return sessionNum;
+	}
+	
+	public long getSlideCount() {
+		return slideCount;
 	}
 	
 	public void newVote(String id) {

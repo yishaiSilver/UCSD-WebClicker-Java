@@ -16,23 +16,38 @@ public class MainClass {
 		
 		boolean startedKeyLogger = false;
 		
+//		System.out.println();
+//		
+//		String packet = "01142020202020202020202020202020202000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000006";
+//		
+//		System.out.print("public static final byte[] PACKET_" + packet.substring(0, 8) + " = new byte[] {");
+//		
+//		for (int i = 0; i < packet.length(); i ++) {
+//			if (i % 2 == 0 && i != 0) {
+//				System.out.print(", 0x");
+//			}
+//			System.out.print(packet.charAt(i));
+//		}
+//		
+//		System.out.println("};");
+		
 		try {
 			while(true) {
-				System.out.println(web.isCourseSelected());
-				if(web.isCourseSelected() && !startedKeyLogger) {
-					String imageUploadSite = "http://54.153.95.213:3001/upload";
-					String lectureNum = web.getLectureNumber();
-					String courseName = web.getSelectedCourse();
-					String instructorID = web.getID();
-					VoteStatus voteStatus = new VoteStatus();
-					
-					System.out.println(lectureNum + courseName + instructorID);
-					
-					KeyLogger l = new KeyLogger(display, usb, web, voteStatus, imageUploadSite, "Lecture"+lectureNum, courseName, instructorID);  
-					Thread t1 = new Thread(l);  
-					t1.start(); 
-					startedKeyLogger = true;
-				}
+//				System.out.println(web.isCourseSelected());
+//				if(web.isCourseSelected() && !startedKeyLogger) {
+//					String imageUploadSite = "http://54.153.95.213:3001/upload";
+//					String sessionNum = web.getSessionNumber();
+//					String courseName = web.getSelectedCourse();
+//					String instructorID = web.getID();
+//					VoteStatus voteStatus = new VoteStatus();
+//					
+//					System.out.println(sessionNum + courseName + instructorID);
+//					
+//					KeyLogger l = new KeyLogger(display, usb, web, voteStatus, imageUploadSite, "Lecture" + sessionNum, courseName, instructorID);  
+//					Thread t1 = new Thread(l);  
+//					t1.start(); 
+//					startedKeyLogger = true;
+//				}
 				
 				controller.setNumResponsesText("" + display.getNumResponses());
 				

@@ -55,11 +55,11 @@ public class KeyLoggerHelper extends JFrame implements NativeKeyListener {
 
 	private static final int MAX_TITLE_LENGTH = 1024;
 	private boolean ctrl = false, shift = false, s = false, v = false;
-	private int screen_shot_number = 1;
-	private int current_number = 1;
+	public int screen_shot_number;
+	public int current_number;
 
 	public KeyLoggerHelper(Display display, USBController usb, WebController web, VoteStatus voteStatus,
-			String imageUploadSite, String lecture, String courseName, String instructorID) {
+			String imageUploadSite, String lecture, int slideNum, String courseName, String instructorID) {
 		this.display = display;
 		this.usb = usb;
 		this.web = web;
@@ -68,6 +68,8 @@ public class KeyLoggerHelper extends JFrame implements NativeKeyListener {
 		this.lecture = lecture;
 		this.courseName = courseName;
 		this.instructorID = instructorID;
+		this.screen_shot_number = slideNum;
+		this.current_number = slideNum;
 
 	}
 
@@ -75,6 +77,7 @@ public class KeyLoggerHelper extends JFrame implements NativeKeyListener {
 		if (shouldStart) {
 			usb.startPoll();
 			web.createPoll();
+			web.activatePoll();
 			voteStatus.view(true);
 		} else {
 			usb.stopPoll();
@@ -97,6 +100,8 @@ public class KeyLoggerHelper extends JFrame implements NativeKeyListener {
 		try {
 			int width = 0;
 			int height = 0;
+			int xCor = 0;
+			int yCor = 0;
 
 			GraphicsEnvironment ge = GraphicsEnvironment.getLocalGraphicsEnvironment();
 			GraphicsDevice[] gs = ge.getScreenDevices();
@@ -104,10 +109,16 @@ public class KeyLoggerHelper extends JFrame implements NativeKeyListener {
 			DisplayMode mode = gs[gs.length - 1].getDisplayMode();
 			width += mode.getWidth();
 			height += mode.getHeight();
-			BufferedImage image = new Robot()
-					.createScreenCapture(gs[gs.length - 1].getDefaultConfiguration().getBounds());
+			double scale = 96.0 / Toolkit.getDefaultToolkit().getScreenResolution();
+			xCor = (int) ((gs[gs.length - 1].getDefaultConfiguration().getBounds().getX()) * scale);
+			yCor = (int) ((gs[gs.length - 1].getDefaultConfiguration().getBounds().getY()) * scale);
+
+			BufferedImage image = new Robot().createScreenCapture(new Rectangle(xCor, yCor, width, height));
 			ImageIO.write(image, "jpg",
 					new File("screenshots/screenshot" + Integer.toString(screen_shot_number) + ".jpg"));
+
+			// System.out.println(scale);
+
 			screen_shot_number++;
 			current_number++;
 			CloseableHttpClient httpclient = HttpClients.createDefault();
@@ -220,7 +231,7 @@ public class KeyLoggerHelper extends JFrame implements NativeKeyListener {
 			System.exit(1);
 		}
 		GlobalScreen.addNativeKeyListener(new KeyLoggerHelper(this.display, this.usb, this.web, this.voteStatus,
-				this.imageUploadSite, this.lecture, this.courseName, this.instructorID));
+				this.imageUploadSite, this.lecture, this.screen_shot_number, this.courseName, this.instructorID));
 	}
 
 	public void stopHotKeys() {
