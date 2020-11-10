@@ -16,21 +16,6 @@ public class MainClass {
 		
 		boolean startedKeyLogger = false;
 		
-//		System.out.println();
-//		
-//		String packet = "01142020202020202020202020202020202000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000006";
-//		
-//		System.out.print("public static final byte[] PACKET_" + packet.substring(0, 8) + " = new byte[] {");
-//		
-//		for (int i = 0; i < packet.length(); i ++) {
-//			if (i % 2 == 0 && i != 0) {
-//				System.out.print(", 0x");
-//			}
-//			System.out.print(packet.charAt(i));
-//		}
-//		
-//		System.out.println("};");
-		
 		try {
 			while(true) {
 //				System.out.println(web.isCourseSelected());
@@ -49,7 +34,18 @@ public class MainClass {
 //					startedKeyLogger = true;
 //				}
 				
-				controller.setNumResponsesText("" + display.getNumResponses());
+				int[] votes = web.getVotes(true);
+				
+				if(votes != null) {
+					display.updateDataset(votes);
+					
+					int total = 0;
+					for(int i : votes) {
+						total += i;
+					}
+						
+					controller.setNumResponsesText("" + total);
+				}
 				
 				//voteStatus.setText("Poll Running, "+Integer.toString(usb.getNumVotes() + web.getNumVotes())+" responses.");
 				

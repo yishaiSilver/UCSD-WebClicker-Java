@@ -144,13 +144,18 @@ public class Display extends JFrame {
 		return aCount + bCount + cCount + dCount + eCount;
 	}
 	
+	public int[] getVotes() {
+		return new int[] {aCount, bCount, cCount, dCount, eCount};
+	}
+	
 	/**
 	 * Used to log a student's response.
 	 * 
 	 * @param studentID the student's ID
 	 * @param response the student's response (A,B,C,D, or E)
 	 */
-	public void newResponse(String studentID, String response) {
+	public boolean newResponse(String studentID, String response, boolean shouldUpdateCount) {
+		boolean output = false;
 		boolean newStudent = true;
 		
 		//Get extant responses
@@ -160,6 +165,12 @@ public class Display extends JFrame {
 		for(int i = 0; i < responses.size(); i ++) {
 			//if student is updating response, act accordingly, exit
 			if(responses.get(i).getStudentID().equals(studentID)) {
+				
+				// if the response already exists, don't do anything
+				if(responses.get(i).getResponse().contentEquals(response)) {
+					return false;
+				}
+				
 				responses.get(i).setResponse(response);
 				newStudent = false;
 				break;
@@ -172,7 +183,11 @@ public class Display extends JFrame {
 			responses.add(newResponse);
 		}
 		
-		updateDataset();
+		if(shouldUpdateCount) {
+			updateDataset();
+		}
+		
+		return true;
 	}
 	
 	/**
@@ -320,7 +335,7 @@ public class Display extends JFrame {
 	/**
 	 * Used to record all responses and then reset said responses.
 	 */
-	public static void nextQuestion() {
+	public void nextQuestion() {
 		question = new Question();
 		updateDataset();
 	}

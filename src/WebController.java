@@ -25,6 +25,8 @@ import java.awt.event.ActionListener;
 import java.awt.event.FocusEvent;
 import java.awt.event.FocusListener;
 import java.io.StringReader;
+import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.net.URI;
 import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.Firestore;
@@ -32,11 +34,19 @@ import com.google.cloud.firestore.QueryDocumentSnapshot;
 import com.google.cloud.firestore.QuerySnapshot;
 import com.google.cloud.firestore.SetOptions;
 import com.google.cloud.firestore.WriteResult;
+
+import purejavahidapi.DeviceRemovalListener;
+import purejavahidapi.HidDevice;
+import purejavahidapi.HidDeviceInfo;
+import purejavahidapi.InputReportListener;
+import purejavahidapi.PureJavaHidApi;
+
 import org.json.simple.JSONObject;
 import org.json.simple.JSONArray;
 import org.json.simple.parser.JSONParser;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
@@ -55,11 +65,9 @@ import javax.swing.SpringLayout;
 
 
 public class WebController {
-	
-	//-----BEGIN RSA PUBLIC KEY-----\nMIGJAoGBAMFFsiyqlCUPZ22mRb6Lfrl4WrG+XC/fVOuUg/fuksbFGVlC7Lxkk25h\nmZW1AV/JkeSQC3KWcHLqzfsJKai6kL65lGDSpJKyPl0tykpeGe2fBgEN35ZDU5D4\n8dZqrxX+sRFPVyvUEvl40dzKU7ADRS9L9B8YbKmpHRwFlEd2t8SjAgMBAAE=\n-----END RSA PUBLIC KEY-----
-	public static final String RSA_PUBLIC = "-----BEGIN RSA PUBLIC KEY-----\nMIGJAoGBAMFFsiyqlCUPZ22mRb6Lfrl4WrG+XC/fVOuUg/fuksbFGVlC7Lxkk25h\nmZW1AV/JkeSQC3KWcHLqzfsJKai6kL65lGDSpJKyPl0tykpeGe2fBgEN35ZDU5D4\n8dZqrxX+sRFPVyvUEvl40dzKU7ADRS9L9B8YbKmpHRwFlEd2t8SjAgMBAAE=\n-----END RSA PUBLIC KEY-----";
-			
-	public static final String TMP_SESSION = "2BzeQRXlWeJX2v8BsSrQ";
+
+	public static final String RSA_PUBLIC = "-----BEGIN RSA PUBLIC KEY-----\nMIGJAoGBAL1zTCmLCknSMnqPiGNo0mj2bQuhBdte/s8rE+EtWp5ZfPjewneoKwjNXd9hM1s2RtHhehka+unOxfyDvMyzRPsrUdeCxmROZ/v7fFtgnSzlgQbqYNIaC62euPuvD5AR7pekPQUYtFgmx14SJrBNz213y9v6GQNfVUOMl0ojqKdbAgMBAAE=\n-----END RSA PUBLIC KEY-----";
+
 	
 	public static final String COURSE_NAME = "test";
 	public static final String CHARACTERS = "0123456789"
@@ -106,6 +114,8 @@ public class WebController {
 	JPanel loginPanel;
 	JPanel courseSelectionPanel;
 	JComboBox<String> courseSelector;
+	JButton resumeSessionButton;
+	JButton newSessionButton;
 	JTextField usernameBox;
 	JPasswordField passwordBox;
 //	JTextField sessionNumber;
@@ -113,15 +123,18 @@ public class WebController {
 	CredentialController credController;
 	EncryptionController encrypt;
 	
+	private WebsocketClientEndpoint socket;
+	
 	public WebController(Display display) {
-//		this.display = display;
-//		courses = new ArrayList<NameValuePair>();
-//		
-//		Thread t = new Thread(new Runnable() { public void run() {
-//			BasicConfigurator.configure();
-//			begin();
-//		}});
-//		t.start();
+		this.display = display;
+		courses = new ArrayList<NameValuePair>();
+		
+		Thread t = new Thread(new Runnable() { public void run() {
+			BasicConfigurator.configure();
+			begin();
+		}});
+		
+		t.start();
 	}
 	
 	private void begin() {
@@ -206,6 +219,7 @@ public class WebController {
 		courseSelector = new JComboBox<String>();
 		courseSelector.setPreferredSize(new Dimension(200, 30));
 		layout.putConstraint(SpringLayout.NORTH, courseSelector, 50, SpringLayout.NORTH, courseSelectionPanel);
+		courseSelector.addActionListener(selectedCourse);
 		courseSelectionPanel.add(courseSelector);
 		
 //		// add the lecture number input field
@@ -224,12 +238,12 @@ public class WebController {
 //		courseSelectionPanel.add(lectureNumber);
 
 		// add new session button
-		JButton resumeSessionButton = new JButton("Resume Session");
+		resumeSessionButton = new JButton("Resume Session");
 		resumeSessionButton.addActionListener(resumeSession);
 		courseSelectionPanel.add(resumeSessionButton);
 
 		// add new session button
-		JButton newSessionButton = new JButton("New Session");
+		newSessionButton = new JButton("New Session");
 		newSessionButton.addActionListener(newSession);
 		courseSelectionPanel.add(newSessionButton);
 		
@@ -306,6 +320,7 @@ public class WebController {
 					
 					String courseName = (String) course.get("courseName");
 					String courseID = (String) course.get("courseID");
+					
 					NameValuePair coursePair = new BasicNameValuePair(courseName, courseID);
 					courses.add(coursePair);
 					
@@ -341,22 +356,45 @@ public class WebController {
 		}
 	};
 	
-	private ActionListener chooseCourse = new ActionListener() {
+	private ActionListener selectedCourse = new ActionListener() {
 		@Override
 		public void actionPerformed(ActionEvent e) {
 			courseName = (String)courseSelector.getSelectedItem();
 			
-			for(NameValuePair course : courses) {
-				if(course.getName().equals(courseName)) {
-					courseID = course.getValue();
-					break;
-				}
+			if(courseName.contentEquals("Test Course 2")) {
+				selectorSetActiveSession(true);
 			}
-			
-			courseSelected = true;
-			
-			createSession();
-			displayFrame.setVisible(false);
+			else {
+				selectorSetActiveSession(false);
+			}
+		}
+	};
+	
+	public void selectorSetActiveSession(boolean isActive) {
+		if(isActive) {
+			resumeSessionButton.setText("Join Active Session");
+//			resumeSessionButton.removeActionListener(resumeSession);
+//			resumeSessionButton.addActionListener(resumeSession);
+
+			newSessionButton.setText("End Active Session");
+			newSessionButton.removeActionListener(newSession);
+			newSessionButton.addActionListener(endActiveSession);
+		}
+		else {
+			resumeSessionButton.setText("Resume Session");
+//			resumeSessionButton.removeActionListener(resumeSession);
+//			resumeSessionButton.addActionListener(resumeSession);
+
+			newSessionButton.setText("New Session");
+			newSessionButton.removeActionListener(endActiveSession);
+			newSessionButton.addActionListener(newSession);
+		}
+	}
+	
+	private ActionListener endActiveSession = new ActionListener() {
+		@Override
+		public void actionPerformed(ActionEvent e) {
+			selectorSetActiveSession(false);
 		}
 	};
 	
@@ -408,12 +446,16 @@ public class WebController {
 	
 	public void createPoll() {
 		try {
+			if (sessionID.contentEquals("")) {
+				return;
+			}
+			
 			display.nextQuestion();
 			
 			List<NameValuePair> params = new ArrayList<NameValuePair>();
 			
 			params.add(new BasicNameValuePair("pollStartTime", "" + System.currentTimeMillis()));
-			params.add(new BasicNameValuePair("pollSessionID", "" + TMP_SESSION));
+			params.add(new BasicNameValuePair("pollSessionID", "" + sessionID));
 			
 			URI uri = new URIBuilder()
 					.setScheme("http")
@@ -440,7 +482,7 @@ public class WebController {
 			
 			pollID = (String)obj.get("pollID");
 			
-			System.out.println(pollID);
+			System.out.println("Poll ID: " + pollID);
 			
 			httpClient.close();
 			
@@ -453,6 +495,10 @@ public class WebController {
 	
 	public void activatePoll() {
 		try {
+			if (sessionID.contentEquals("")) {
+				return;
+			}
+			
 			List<NameValuePair> params = new ArrayList<NameValuePair>();
 			
 			params.add(new BasicNameValuePair("pollID", pollID));
@@ -470,19 +516,23 @@ public class WebController {
 			
 			CloseableHttpResponse httpResponse = httpClient.execute(httpGet);
 			
-			System.out.println(EntityUtils.toString(httpResponse.getEntity()));
-			System.out.println(httpResponse.getStatusLine());
-			
 			httpClient.close();
 			
 		} catch (Exception e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
+		
+		newResponse("123456", "a");
+		newResponse("987654", "a");
 	}
 	
 	public void deactivatePoll() {
 		try {
+			if (sessionID.contentEquals("")) {
+				return;
+			}
+			
 			List<NameValuePair> params = new ArrayList<NameValuePair>();
 			
 			params.add(new BasicNameValuePair("pollID", pollID));
@@ -504,6 +554,8 @@ public class WebController {
 			System.out.println(httpResponse.getStatusLine());
 			
 			httpClient.close(); 
+			
+			pollID = "";
 			
 		} catch (Exception e) {
 			// TODO Auto-generated catch block
@@ -540,13 +592,16 @@ public class WebController {
 			JSONParser parser = new JSONParser();
 			
 			JSONObject arr = (JSONObject)parser.parse(response);
-			JSONObject obj = (JSONObject)arr.get("data");
 			
-			sessionID = (String)obj.get("sessionID");
-			sessionNum = (long)obj.get("sessionNum");
-			slideCount = (long) 0;
-			
-			System.out.println(sessionID);
+			if((boolean)arr.get("success")) {
+				JSONObject obj = (JSONObject)arr.get("data");
+				
+				sessionID = (String)obj.get("sessionID");
+				sessionNum = (long)obj.get("sessionNum");
+				slideCount = (long) 0;
+				
+				System.out.println(sessionID);
+			}
 			
 			httpClient.close();
 		} catch (Exception e) {
@@ -601,6 +656,10 @@ public class WebController {
 	
 	public void activateSession() {
 		try {
+			if (sessionID.contentEquals("")) {
+				return;
+			}
+			
 			List<NameValuePair> params = new ArrayList<NameValuePair>();
 			
 			params.add(new BasicNameValuePair("sessionID", sessionID));
@@ -631,6 +690,10 @@ public class WebController {
 
 	public void deactivateSession() {
 		try {
+			if (sessionID.contentEquals("")) {
+				return;
+			}
+			
 			List<NameValuePair> params = new ArrayList<NameValuePair>();
 			
 			params.add(new BasicNameValuePair("sessionID", sessionID));
@@ -687,8 +750,16 @@ public class WebController {
 		}
 	}
 	
-	public int[] getVotes() {
+	public int[] getVotes(boolean shouldGetNew) {
+		if(!shouldGetNew) {
+			return allVotes;
+		}
+		
 		try {
+			if (pollID.contentEquals("")) {
+				return null;
+			}
+			
 			List<NameValuePair> params = new ArrayList<NameValuePair>();
 			
 			params.add(new BasicNameValuePair("pollID", pollID));
@@ -714,12 +785,39 @@ public class WebController {
 			JSONParser parser = new JSONParser();
 			
 			JSONObject obj = (JSONObject)parser.parse(response);
-			JSONArray arr = (JSONArray)obj.get("votes");
+			JSONObject data = (JSONObject)obj.get("data");
+			JSONArray arr = (JSONArray)data.get("votes");
+			
+			allVotes = new int[] {0, 0, 0, 0, 0};
 			
 			if(arr != null) {
 				for(int i = 0; i < arr.size(); i++) {
 					JSONObject iObj = (JSONObject)arr.get(i);
-					System.out.println(iObj.get("vote"));
+					String vote = (String)iObj.get("studentVote");
+					System.out.println("Student's vote: " + vote);
+					
+					switch(vote) {
+					case "a":
+					case "A":
+						allVotes[0]++;
+						break;
+					case "b":
+					case "B":
+						allVotes[1]++;
+						break;
+					case "c":
+					case "C":
+						allVotes[2]++;
+						break;
+					case "d":
+					case "D":
+						allVotes[3]++;
+						break;
+					case "e":
+					case "E":
+						allVotes[4]++;
+						break;
+				}
 				}
 			}
 			
@@ -728,7 +826,6 @@ public class WebController {
 			e.printStackTrace();
 		}
 		
-		allVotes = new int[] {votesA, votesB, votesC, votesD, votesE};
 		return allVotes;
 	}
 	
@@ -748,24 +845,20 @@ public class WebController {
 		return courseSelected;
 	}
 	
+	public String getCourseID() {
+		return courseID;
+	}
+	
+	public boolean isSessionStarted() {
+		return !sessionID.contentEquals("");
+	}
+	
 	public long getSessionNumber() {
 		return sessionNum;
 	}
 	
 	public long getSlideCount() {
 		return slideCount;
-	}
-	
-	public void newVote(String id) {
-		Map<String, Object> docData = new HashMap<>();
-		docData.put("pollCategories", courseCategories);
-		docData.put("pollSessionID", sessionID);
-		docData.put("pollStartTime", System.currentTimeMillis());
-		ApiFuture<WriteResult> future = db.collection("polls").document(pollID).set(docData);
-		
-		docData = new HashMap<>();
-		docData.put("courseActivityPollID", pollID);
-		future = db.collection("courses").document(courseID).set(docData, SetOptions.merge());
 	}
 	
 	/*
@@ -802,5 +895,59 @@ public class WebController {
 		}
 		
 		return out;
+	}
+	
+	/*
+	 * A lot of this code was taken from this tutorial: 
+	 * https://www.baeldung.com/httpurlconnection-post
+	 */
+	public boolean newResponse(String studentID, String vote) {
+		try {
+			System.out.println("Sending vote to server.");
+			
+			// Create json packet
+			String toSend = "{\"type\":\"vote\", \"iClicker\": \"" + studentID + "\", \"vote\": \""
+					+ vote + "\", \"courseID\": \"" + courseID + "\"}";
+
+			if(socket != null) {
+				socket.sendMessage(toSend);
+			}
+			else {
+				System.err.println("SOCKET NOT OPENED ON WEBCONTROLLER SIDE!!!!!!!!!");
+				StringEntity stringEntity = new StringEntity(toSend);
+				
+				// Establish connection
+				CloseableHttpClient httpClient = HttpClients.createDefault();
+				HttpPost httpPost = new HttpPost("http://54.153.95.213:3001/vote");
+				httpPost.setHeader("Accept", "application/json");
+				httpPost.setHeader("Content-type", "application/json");
+				httpPost.setEntity(stringEntity);
+				
+				// send the packet
+				CloseableHttpResponse httpResponse = httpClient.execute(httpPost);
+				
+				String response = EntityUtils.toString(httpResponse.getEntity());
+				
+				//System.out.println(response);
+			      
+				// https://www.tutorialspoint.com/json/json_java_example.htm
+				JSONParser parser = new JSONParser();
+				
+				JSONObject full = (JSONObject) parser.parse(response);
+				
+				boolean success = (boolean) full.get("success");
+				
+				System.out.println(success);
+				
+				httpClient.close();
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return false;
+	}
+	
+	public void setSocket(WebsocketClientEndpoint socket) {
+		this.socket = socket;
 	}
 }

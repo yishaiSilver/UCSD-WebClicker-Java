@@ -7,6 +7,7 @@
  * @version 1.0
  * @since 2019-08-19
  */
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -94,6 +95,13 @@ public class USBController {
 	
 	private HidDevice dev;
 	
+	private Thread pollThread;
+	private boolean pollThreadShouldStop;
+	
+	private boolean canStartPoll;
+	
+	ArrayList<Response> responses;
+	
 	/**
 	 * Runs a loop to connect to Pi and then control display 
 	 * 
@@ -102,6 +110,9 @@ public class USBController {
 	public USBController(WebController web, Display display) {
 		this.web = web;
 		this.display = display;
+		this.pollThread = null;
+		this.pollThreadShouldStop = false;
+		this.responses = new ArrayList<Response>();
 		
 		Thread t = new Thread(new Runnable() { public void run() { 
 			try {
@@ -119,7 +130,7 @@ public class USBController {
 							if (info.getVendorId() == PICLICKER_VID && info.getProductId() == PICLICKER_PID) {
 								// Save PiClicker's info. Change display to connected
 								devInfo = info;
-								System.out.println("Device found.");
+								System.err.println("Device found.");
 								devicePresent = true;
 								break;
 							}
@@ -129,30 +140,31 @@ public class USBController {
 						if(devicePresent && !deviceConfigured) {
 							dev = PureJavaHidApi.openDevice(devInfo);
 							
-							startup();
-							Thread.sleep(250);
-							startSession();
-							
 							//Give it an InputReportListener
 							dev.setInputReportListener(new InputReportListener() {
 								@Override
 								public void onInputReport(HidDevice source, byte Id, byte[] data, int len) {
 									//Print out the report
-									System.out.printf("onInputReport: id %d len %d data ", Id, len);
-									for (int i = 0; i < len; i++) {
-										System.out.printf("%02X ", data[i]);
-									}
-									System.out.println();
+//									System.out.printf("onInputReport: id %d len %d data ", Id, len);
+//									for (int i = 0; i < len; i++) {
+//										System.out.printf("%02X ", data[i]);
+//										System.out.flush();
+//									}
+//									System.out.println();
 									
 									//Check the first byte of the report and act accordingly
-									if(data[0] == BYTE_OPEN) {
+									if(data[0] == (byte) 0x02 && data[1] == (byte) 0x2C) {
+										canStartPoll = true;
+										System.err.println("Can now start poll.");
+									}
+									else if(data[0] == BYTE_OPEN) {
 										//display.openDisplay();
 									}
 									else if (data[0] == BYTE_CLOSE) {
 										//display.closeDisplay();
 									}
 									else if (data[0] == BYTE_NEXT_QUESTION) {
-										Display.nextQuestion();
+										//Display.nextQuestion();
 									}
 									else if (data[0] == BYTE_SCREENSHOT) {
 										//screenshotController.newScreenshot();
@@ -169,8 +181,6 @@ public class USBController {
 										for(int i = 0; i < idArr.length; i ++) {
 											idStr += String.format("%02X", idArr[i]);
 										}
-					
-										System.out.println(idStr);
 										
 										//Get byte responsible for response
 										byte responseByte = data[4];
@@ -203,8 +213,15 @@ public class USBController {
 												break;
 										}
 										
+										System.err.println("Student ID: " + idStr);
+										
 										//Register the response
-										//display.newResponse(idStr, responseLetter);
+										boolean connected = web.isCourseSelected();
+										boolean shouldUpdateDB = display.newResponse(idStr, responseLetter, !connected);
+										System.out.println(web.isSessionStarted());										
+										if(shouldUpdateDB && web.isSessionStarted()) {
+											web.newResponse(idStr, responseLetter);
+										}
 									}
 								}
 							});
@@ -220,6 +237,12 @@ public class USBController {
 								}
 							});
 							
+
+							startup();
+//							Thread.sleep(250);
+							startSession();
+//							
+//							startPoll();
 							deviceConfigured = true;
 						}
 					}
@@ -258,8 +281,55 @@ public class USBController {
 		
 		if(dev != null) {
 			try {
-				dev.setOutputReport((byte)0, START_POLL, START_POLL.length);
-				dev.setOutputReport((byte)0, PACKET_01110000, PACKET_01110000.length);
+				
+				responses.clear();
+				
+				pollThread = new Thread(new Runnable() { public void run() {
+					try {
+						while(true) {
+							System.err.println("Trying to start poll. ");
+							if(canStartPoll) {
+								dev.setOutputReport((byte)0, START_POLL, START_POLL.length);
+								dev.setOutputReport((byte)0, PACKET_01110000, PACKET_01110000.length);
+								break;
+							}
+						}
+						
+						int time = 2; 
+						Thread.sleep(1000);
+						
+						while(true) {
+							if(pollThreadShouldStop) {
+								pollThread = null;
+								pollThreadShouldStop = false;
+								break;
+							}
+														
+							byte[] screenTimeUpdate = getTimeReport(time, 0);
+							dev.setOutputReport((byte)0, screenTimeUpdate, screenTimeUpdate.length);
+							Thread.sleep(500);
+
+							int[] allVotes = display.getVotes();
+							if(web.isCourseSelected()) {
+								allVotes = web.getVotes(false);
+							}
+
+							byte[] screenVoteUpdate = getVoteCountReport(0, 0, 0, 0, 0);
+							if(allVotes != null) {
+								screenVoteUpdate = getVoteCountReport(allVotes[0], allVotes[1], allVotes[2], allVotes[3], allVotes[4]);
+							}
+							
+							dev.setOutputReport((byte)0, screenVoteUpdate, screenVoteUpdate.length);
+							Thread.sleep(500);
+							
+							time ++;
+						}
+					} catch (Exception e) {
+						e.printStackTrace();
+					}
+				}});
+				pollThread.start();
+				
 			} catch (Exception e) {
 				e.printStackTrace();
 			}
@@ -270,6 +340,11 @@ public class USBController {
 		if(dev != null) {
 			try {
 				dev.setOutputReport((byte)0, STOP_POLL, STOP_POLL.length);
+				sendReport(PACKET_01136943);
+				sendReport(PACKET_01142020);
+				if (pollThread != null) {
+					pollThreadShouldStop = true;
+				}
 			} catch (Exception e) {
 				e.printStackTrace();
 			}
@@ -299,16 +374,16 @@ public class USBController {
 		 * */
 		if(dev != null) {
 			try {
-				dev.setOutputReport((byte)0, PACKET_01120000, PACKET_01120000.length);
-				dev.setOutputReport((byte)0, PACKET_01320004, PACKET_01320004.length);
-				dev.setOutputReport((byte)0, PACKET_011e0000, PACKET_011e0000.length);
-				dev.setOutputReport((byte)0, PACKET_01150000, PACKET_01150000.length);
-				dev.setOutputReport((byte)0, PACKET_01220000, PACKET_01220000.length);
-				dev.setOutputReport((byte)0, PACKET_01102141, PACKET_01102141.length);
-				dev.setOutputReport((byte)0, PACKET_011e0000, PACKET_011e0000.length);
-				dev.setOutputReport((byte)0, PACKET_01160000, PACKET_01160000.length);
-				dev.setOutputReport((byte)0, PACKET_01136943, PACKET_01136943.length);
-				dev.setOutputReport((byte)0, PACKET_01142020, PACKET_01142020.length);
+				sendReport(PACKET_01120000);
+				sendReport(PACKET_01320004);
+				sendReport(PACKET_011e0000);
+				sendReport(PACKET_01150000);
+				sendReport(PACKET_01220000);
+				sendReport(PACKET_01102141);
+				sendReport(PACKET_011e0000);
+				sendReport(PACKET_01160000);
+				sendReport(PACKET_01136943);
+				sendReport(PACKET_01142020);
 				System.err.println("Completed startup!");
 			} catch (Exception e) {
 				e.printStackTrace();
@@ -358,24 +433,24 @@ public class USBController {
 		 * */
 		if(dev != null) {
 			try {
-				dev.setOutputReport((byte)0, PACKET_01150000, PACKET_01150000.length);
-				dev.setOutputReport((byte)0, PACKET_01120000, PACKET_01120000.length);
-				dev.setOutputReport((byte)0, PACKET_011e0000, PACKET_011e0000.length);
-				dev.setOutputReport((byte)0, PACKET_01150000, PACKET_01150000.length);
-				dev.setOutputReport((byte)0, PACKET_01220000, PACKET_01220000.length);
-				dev.setOutputReport((byte)0, PACKET_01102141, PACKET_01102141.length);
-				dev.setOutputReport((byte)0, PACKET_011e0000, PACKET_011e0000.length);
-				dev.setOutputReport((byte)0, PACKET_01160000, PACKET_01160000.length);
-				dev.setOutputReport((byte)0, PACKET_01298080, PACKET_01298080.length);
-				dev.setOutputReport((byte)0, PACKET_01150000, PACKET_01150000.length);
-				dev.setOutputReport((byte)0, PACKET_01120000, PACKET_01120000.length);
-				dev.setOutputReport((byte)0, PACKET_011e0000, PACKET_011e0000.length);
-				dev.setOutputReport((byte)0, PACKET_012a2141, PACKET_012a2141.length);
-				dev.setOutputReport((byte)0, PACKET_01150000, PACKET_01150000.length);
-				dev.setOutputReport((byte)0, PACKET_01220000, PACKET_01220000.length);
-				dev.setOutputReport((byte)0, PACKET_01102141, PACKET_01102141.length);
-				dev.setOutputReport((byte)0, PACKET_011e0000, PACKET_011e0000.length);
-				dev.setOutputReport((byte)0, PACKET_01160000, PACKET_01160000.length);
+				sendReport(PACKET_01150000);
+				sendReport(PACKET_01120000);
+				sendReport(PACKET_011e0000);
+				sendReport(PACKET_01150000);
+				sendReport(PACKET_01220000);
+				sendReport(PACKET_01102141);
+				sendReport(PACKET_011e0000);
+				sendReport(PACKET_01160000);
+				sendReport(PACKET_01298080);
+				sendReport(PACKET_01150000);
+				sendReport(PACKET_01120000);
+				sendReport(PACKET_011e0000);
+				sendReport(PACKET_012a2141);
+				sendReport(PACKET_01150000);
+				sendReport(PACKET_01220000);
+				sendReport(PACKET_01102141);
+				sendReport(PACKET_011e0000);
+				sendReport(PACKET_01160000);
 				System.err.println("Completed start session!");
 			} catch (Exception e) {
 				e.printStackTrace();
@@ -386,7 +461,14 @@ public class USBController {
 	// time is in seconds
 	private byte[] getTimeReport(int time, int totalVotes) {
 		String minutes = "" + (time / 60) % 60;
+		while(minutes.length() < 2) {
+			minutes = "0" + minutes;
+		}
+		
 		String seconds = "" + time % 60;
+		while(seconds.length() < 2) {
+			seconds = "0" + seconds;
+		}
 		
 		String votes = "" + totalVotes;
 		while(votes.length() < 5) {
@@ -396,4 +478,60 @@ public class USBController {
 		byte[] output = {0x01, 0x13, (byte) minutes.charAt(0), (byte) minutes.charAt(1), 0x3a, (byte) seconds.charAt(0), (byte) seconds.charAt(1), 0x20, 0x4e, 0x55, 0x4d, 0x20, 0x20, (byte) votes.charAt(0), (byte) votes.charAt(1), (byte) votes.charAt(2), (byte) votes.charAt(3), (byte) votes.charAt(4), 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, (byte) 0xa0};
 		return output;
 	}
+	
+	private byte[] getVoteCountReport(int aCount, int bCount, int cCount, int dCount, int eCount) {
+		String aStr = "" + aCount;
+		while(aStr.length() < 3) {
+			aStr = " " + aStr;
+		}
+		
+		String bStr = "" + bCount;
+		while(bStr.length() < 3) {
+			bStr = " " + bStr;
+		}
+		
+		String cStr = "" + cCount;
+		while(cStr.length() < 3) {
+			cStr = " " + cStr;
+		}
+		
+		
+		String dStr = "" + dCount;
+		while(dStr.length() < 3) {
+			dStr = " " + dStr;
+		}
+		
+		String eStr = "" + eCount;
+		while(eStr.length() < 3) {
+			eStr = " " + eStr;
+		}
+		
+		byte[] output = {0x01, 0x14, 
+				(byte) aStr.charAt(0), (byte) aStr.charAt(1), (byte) aStr.charAt(2),
+				(byte) bStr.charAt(0), (byte) bStr.charAt(1), (byte) bStr.charAt(2),
+				(byte) cStr.charAt(0), (byte) cStr.charAt(1), (byte) cStr.charAt(2),
+				(byte) dStr.charAt(0), (byte) dStr.charAt(1), (byte) dStr.charAt(2),
+				(byte) eStr.charAt(0), (byte) eStr.charAt(1), (byte) eStr.charAt(2), 
+				0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x48};
+		return output;
+	}
+	
+	private void sendReport(byte[] report) {
+		dev.setOutputReport((byte) 0, report, report.length);
+
+//		System.out.printf("onOutputReport: id %d len %d data ", 0, report.length);
+//		for (int i = 0; i < report.length; i++) {
+//			System.out.printf("%02X ", report[i]);
+//			System.out.flush();
+//		}
+//		System.out.println();
+		
+		try {
+			Thread.sleep(100);
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
+	
+	
 }
