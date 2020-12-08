@@ -1,5 +1,3 @@
-import org.apache.log4j.BasicConfigurator;
-
 public class MainClass {
 	
 	public static final String WEB_URL = "www.google.com";
@@ -33,21 +31,28 @@ public class MainClass {
 //					t1.start(); 
 //					startedKeyLogger = true;
 //				}
-				
-				int[] votes = web.getVotes(true);
-				
-				if(votes != null) {
-					display.updateDataset(votes);
+	
+				if(controller.isPollActive()) {
+					if(web.isSessionStarted()) {
+						int[] votes = web.getVotes(true);
 					
-					int total = 0;
-					for(int i : votes) {
-						total += i;
+						if(votes != null) {
+							display.updateDataset(votes);
+							
+							int total = 0;
+							for(int i : votes) {
+								total += i;
+							}
+								
+							controller.setNumResponsesText("" + total);
+						}
 					}
-						
-					controller.setNumResponsesText("" + total);
+					else {
+						int total = display.getNumResponses();
+
+						controller.setNumResponsesText("" + total);
+					}
 				}
-				
-				//voteStatus.setText("Poll Running, "+Integer.toString(usb.getNumVotes() + web.getNumVotes())+" responses.");
 				
 				Thread.sleep(500);
 			}

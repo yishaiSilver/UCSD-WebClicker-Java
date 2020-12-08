@@ -1,9 +1,7 @@
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.FileWriter;
-import java.io.IOException;
 
 import javax.swing.JPasswordField;
 import javax.swing.JTextField;
@@ -33,11 +31,8 @@ public class CredentialController{
 				username = bufferedReader.readLine();
 				password = bufferedReader.readLine();
 				
-				username = "instructor@ucsd.edu";
-				password = "instructor";
-				
-				System.out.println(username);
-				System.out.println(password);
+//				username = "instructor@ucsd.edu";
+//				password = "instructor";
 				
 				usernameBox.setText(username);
 				passwordBox.setText(password);
@@ -64,6 +59,11 @@ public class CredentialController{
 	
 	public void saveCreds(String username, String encryptedPassword) {
 		try {
+			File oldCreds = new File("assets/creds.txt");
+			if(oldCreds.exists()) {
+				oldCreds.delete();
+			}
+			
 			FileWriter file = new FileWriter("assets/creds.txt");
 			file.write(username + "\n");
 			file.write(encryptedPassword);

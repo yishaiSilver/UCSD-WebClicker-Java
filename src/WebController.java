@@ -1,9 +1,7 @@
 import org.apache.http.NameValuePair;
 import org.apache.http.entity.*;
 import org.apache.http.client.methods.CloseableHttpResponse;
-import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
-import org.apache.http.client.utils.URIBuilder;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.message.BasicNameValuePair;
@@ -28,6 +26,8 @@ import java.io.StringReader;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.URI;
+import java.net.URISyntaxException;
+
 import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.Firestore;
 import com.google.cloud.firestore.QueryDocumentSnapshot;
@@ -86,11 +86,7 @@ public class WebController {
 	private int votesE = 0;
 	private int[] allVotes;
 	
-	private Display display;
-	
-	private Firestore db;
-	
-	private ArrayList<NameValuePair> courses;
+	private ArrayList<Course> courses;
 	
 	private String courseName = "";
 	private String courseID = "";
@@ -99,15 +95,10 @@ public class WebController {
 	private long slideCount;
 	private String pollID = "";
 	
-	private String instructorUN = "";
-	private String instructorPW = "";
 	private String instructorID = "";
-	
-	private Map<String, Object> courseCategories;
 
 	private boolean courseSelected = false;
-	
-	List<QueryDocumentSnapshot> users;
+	private Course currentCourse;
 	
 	JFrame displayFrame;
 	JPanel displayPanel;
@@ -123,17 +114,29 @@ public class WebController {
 	CredentialController credController;
 	EncryptionController encrypt;
 	
-	private WebsocketClientEndpoint socket;
+	public static final String SOCKET_SERVER_HOSTNAME = "ws://54.153.95.213:3001";
+	public static final int SOCKET_SERVER_PORT = 3001;
+	public static final int SOCKET_TIMEOUT = 0;
+
+	public WebsocketClientEndpoint socket;
+	public ControlWindow controlWindow;
+	
+	private boolean firstMessage = true;
+	
+	private boolean loggedIn = false;
+	private String sentUsername;
+	private String sentEncryptedPassword;
+	
 	
 	public WebController(Display display) {
-		this.display = display;
-		courses = new ArrayList<NameValuePair>();
+		courses = new ArrayList<Course>();
+		
+		SetupNotificationSocket();
 		
 		Thread t = new Thread(new Runnable() { public void run() {
 			BasicConfigurator.configure();
 			begin();
 		}});
-		
 		t.start();
 	}
 	
@@ -161,7 +164,7 @@ public class WebController {
 		JLabel usernameLabel = new JLabel("Username: ");
 		layout.putConstraint(SpringLayout.WEST, usernameLabel, 5, SpringLayout.WEST, displayFrame);
 		layout.putConstraint(SpringLayout.NORTH, usernameLabel, 10, SpringLayout.NORTH, displayFrame);
-		usernameBox = new JTextField(instructorUN, 20);
+		usernameBox = new JTextField("", 20);
 		layout.putConstraint(SpringLayout.WEST, usernameBox, 5, SpringLayout.EAST, usernameLabel);
 		layout.putConstraint(SpringLayout.NORTH, usernameBox, 0, SpringLayout.NORTH, usernameLabel);
 		
@@ -169,7 +172,7 @@ public class WebController {
 		JLabel passwordLabel = new JLabel("Password: ");
 		layout.putConstraint(SpringLayout.WEST, passwordLabel, 6, SpringLayout.WEST, displayFrame);
 		layout.putConstraint(SpringLayout.NORTH, passwordLabel, 25, SpringLayout.NORTH, usernameBox);
-		passwordBox = new JPasswordField(instructorPW, 20);
+		passwordBox = new JPasswordField("", 20);
 		passwordBox.setEchoChar('*');
 		passwordBox.addActionListener(login);
 		passwordBox.addFocusListener(new FocusListener() {
@@ -267,72 +270,32 @@ public class WebController {
 		credController = new CredentialController(usernameBox, passwordBox);
 	}
 	
-	/*
-	 * A lot of this code was taken from this tutorial: 
-	 * https://www.baeldung.com/httpurlconnection-post
-	 */
-	private boolean login(String username, String password) {
+	public void setControlWindow(ControlWindow controlWindow) {
+		this.controlWindow = controlWindow;
+	}
+	
+	private boolean login(String username, char[] password) {
 		try {
-			// Establish connection
-			CloseableHttpClient httpClient = HttpClients.createDefault();
-			HttpPost httpPost = new HttpPost("http://54.153.95.213:3001/login");
-			httpPost.setHeader("Accept", "application/json");
-			httpPost.setHeader("Content-type", "application/json");
+			// see if it's necessary to encrypt the password (was it changed from the saved, already encrypted password)
+			String encryptedPassword = "";
+			String savedPassword = credController.getPassword();
+			if(Arrays.equals(password, savedPassword.toCharArray())) {
+				encryptedPassword = savedPassword;
+			}
+			else {
+				encryptedPassword = getEncrypted(password);
+			}
 			
 			// Create json packet
-			String toSend = "{\"email\": \"" + username + "\", \"password\": \""
-					+ getEncrypted(password) + "\"}";
-			StringEntity stringEntity = new StringEntity(toSend);
-			System.out.println(toSend);
-			httpPost.setEntity(stringEntity);
+			String creds = "{\"type\" : \"login\", \"email\": \"" + username + "\", \"password\": \""
+					+ encryptedPassword + "\"}";
+			  
+			socket.sendMessage(creds);
 			
-			// send the packet
-			CloseableHttpResponse httpResponse = httpClient.execute(httpPost);
+			sentUsername = username;
+			sentEncryptedPassword = encryptedPassword;
 			
-			String response = EntityUtils.toString(httpResponse.getEntity());
-			
-			System.out.println(response);
-		      
-			// https://www.tutorialspoint.com/json/json_java_example.htm
-			JSONParser parser = new JSONParser();
-			
-			JSONObject full = (JSONObject) parser.parse(response);
-			
-			boolean success = (boolean) full.get("success");
-			
-			if(success) {
-				JSONObject data = (JSONObject) full.get("data");
-				JSONArray JSONCourses = (JSONArray) data.get("courses");
-				
-				JSONObject account = (JSONObject) data.get("account");
-				instructorID = (String) account.get("accountID");
-				
-				courseSelector.removeAllItems();
-				for(int i = 0; i < JSONCourses.size(); i ++) {
-					Object obj = JSONCourses.get(i);
-					
-					// only look at JSONObjects
-					if(!obj.getClass().equals(data.getClass())) {
-						break;
-					}
-					
-					JSONObject course = (JSONObject) obj;
-					
-					String courseName = (String) course.get("courseName");
-					String courseID = (String) course.get("courseID");
-					
-					NameValuePair coursePair = new BasicNameValuePair(courseName, courseID);
-					courses.add(coursePair);
-					
-					courseSelector.addItem(courseName);
-					
-				}
-				
-				// show the course selection menu
-				CardLayout layout = (CardLayout)displayPanel.getLayout();
-				layout.show(displayPanel, "Courses");
-			}
-			httpClient.close();
+			return true;
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
@@ -344,10 +307,14 @@ public class WebController {
 		public void actionPerformed(ActionEvent e) {
 			try {
 				// get the credentials from the input boxes
-				instructorUN = usernameBox.getText();
-				instructorPW = new String(passwordBox.getPassword());
+				String instructorUN = usernameBox.getText();
+				char[] instructorPW = passwordBox.getPassword();
 				
 				login(instructorUN, instructorPW);
+				
+				for(int i = 0; i < instructorPW.length; i++) {
+					instructorPW[i] = '0';
+				}
 				
 			} catch(Exception err) {
 				System.out.println("Failed to connect to web.");
@@ -361,84 +328,82 @@ public class WebController {
 		public void actionPerformed(ActionEvent e) {
 			courseName = (String)courseSelector.getSelectedItem();
 			
-			if(courseName.contentEquals("Test Course 2")) {
-				selectorSetActiveSession(true);
-			}
-			else {
-				selectorSetActiveSession(false);
+			for(Course course : courses) {
+				if(course.getName().equals(courseName)) {
+					courseID = course.getID();
+					sessionID = course.getSession();
+					selectorSetActiveSession(course.hasActiveSession());
+					
+					currentCourse = course;
+					break;
+				}
 			}
 		}
 	};
+	
+	private void UpdateCourseStatus(String courseName, String sessionID) {
+		for(Course course : courses) {
+			if(course.getName().contentEquals(courseName)) {
+				course.setSession(sessionID);
+			}
+		}
+	}
 	
 	public void selectorSetActiveSession(boolean isActive) {
 		if(isActive) {
 			resumeSessionButton.setText("Join Active Session");
-//			resumeSessionButton.removeActionListener(resumeSession);
-//			resumeSessionButton.addActionListener(resumeSession);
 
+			shouldEndActiveSession = true;
 			newSessionButton.setText("End Active Session");
-			newSessionButton.removeActionListener(newSession);
-			newSessionButton.addActionListener(endActiveSession);
 		}
 		else {
-			resumeSessionButton.setText("Resume Session");
-//			resumeSessionButton.removeActionListener(resumeSession);
-//			resumeSessionButton.addActionListener(resumeSession);
+			resumeSessionButton.setText("Resume Last Session");
 
+			shouldEndActiveSession = false;
 			newSessionButton.setText("New Session");
-			newSessionButton.removeActionListener(endActiveSession);
-			newSessionButton.addActionListener(newSession);
 		}
 	}
 	
-	private ActionListener endActiveSession = new ActionListener() {
-		@Override
-		public void actionPerformed(ActionEvent e) {
-			selectorSetActiveSession(false);
-		}
-	};
-	
+	private boolean shouldEndActiveSession = false;
+	private boolean sessionCreated = false;
+	private boolean endingActiveSession = true;
 	private ActionListener newSession = new ActionListener() {
 		@Override
 		public void actionPerformed(ActionEvent e) {
-			courseName = (String)courseSelector.getSelectedItem();
-//			System.err.println("CourseName: " + courseName);
-			
-//			System.err.println("num courses: " + courses.size());
-			for(NameValuePair course : courses) {
-//				System.err.println("CourseName: " + course.getName());
-				
-				if(course.getName().equals(courseName)) {
-					courseID = course.getValue();
-					break;
+			if(shouldEndActiveSession) {
+				deactivateSession();
+				endingActiveSession = true;
+			}
+			else {	
+				if(!sessionCreated) {
+					
+					courseSelected = true;
+					System.err.println("CourseID: " + courseID);
+					
+					System.out.println(sessionID);
+					createSession();
+					
+					while(sessionID.contentEquals("")) {
+						try {
+							System.out.println("Waiting for server to return sessionID");
+							Thread.sleep(10);
+						} catch (InterruptedException e1) {
+							e1.printStackTrace();
+						}
+					}
+					
+					System.out.println("activatingSession");
+					activateSession();
+					displayFrame.setVisible(false);
+					sessionCreated = true;
 				}
 			}
-			
-			courseSelected = true;
-//			System.err.println("CourseID: " + courseID);
-			
-			createSession();
-			activateSession();
-			displayFrame.setVisible(false);
 		}
 	};
 	
 	private ActionListener resumeSession = new ActionListener() {
 		@Override
 		public void actionPerformed(ActionEvent e) {
-			courseName = (String)courseSelector.getSelectedItem();
-//			System.err.println("CourseName: " + courseName);
-			
-			for(NameValuePair course : courses) {
-				if(course.getName().equals(courseName)) {
-					courseID = course.getValue();
-					break;
-				}
-			}
-			
-			courseSelected = true;
-//			System.err.println("CourseID: " + courseID);
-			
 			resumeSession();
 			displayFrame.setVisible(false);
 		}
@@ -446,278 +411,95 @@ public class WebController {
 	
 	public void createPoll() {
 		try {
-			if (sessionID.contentEquals("")) {
-				return;
-			}
+			pollID = "";
+			allVotes = new int[] {0, 0, 0, 0, 0};
 			
-			display.nextQuestion();
+			// Create json packet
+			String toSend = "{\"type\" : \"createPoll\", \"sessionID\" : \"" + sessionID + "\"}";
+
+			socket.sendMessage(toSend);
 			
-			List<NameValuePair> params = new ArrayList<NameValuePair>();
-			
-			params.add(new BasicNameValuePair("pollStartTime", "" + System.currentTimeMillis()));
-			params.add(new BasicNameValuePair("pollSessionID", "" + sessionID));
-			
-			URI uri = new URIBuilder()
-					.setScheme("http")
-					.setHost("54.153.95.213")
-					.setPort(3001)
-					.setPath("/createPoll")
-					.addParameters(params)
-					.build();
-			
-			CloseableHttpClient httpClient = HttpClients.createDefault();
-			HttpGet httpGet = new HttpGet(uri);
-			
-			CloseableHttpResponse httpResponse = httpClient.execute(httpGet);
-			
-			String response = EntityUtils.toString(httpResponse.getEntity());
-			
-			System.out.println(response);
-		      
-			// https://www.tutorialspoint.com/json/json_java_example.htm
-			JSONParser parser = new JSONParser();
-			
-			JSONObject arr = (JSONObject)parser.parse(response);
-			JSONObject obj = (JSONObject)arr.get("data");
-			
-			pollID = (String)obj.get("pollID");
-			
-			System.out.println("Poll ID: " + pollID);
-			
-			httpClient.close();
-			
-			resetVotes();
 		} catch (Exception e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 	}
 	
 	public void activatePoll() {
 		try {
-			if (sessionID.contentEquals("")) {
-				return;
+			while(pollID.contentEquals("")) {
+				Thread.sleep(100);
 			}
 			
-			List<NameValuePair> params = new ArrayList<NameValuePair>();
-			
-			params.add(new BasicNameValuePair("pollID", pollID));
-			
-			URI uri = new URIBuilder()
-					.setScheme("http")
-					.setHost("54.153.95.213")
-					.setPort(3001)
-					.setPath("/activatePoll")
-					.addParameters(params)
-					.build();
-			
-			CloseableHttpClient httpClient = HttpClients.createDefault();
-			HttpGet httpGet = new HttpGet(uri);
-			
-			CloseableHttpResponse httpResponse = httpClient.execute(httpGet);
-			
-			httpClient.close();
+			// Create json packet
+			String toSend = "{\"type\" : \"activatePoll\", \"pollID\" : \"" + pollID + "\"}";
+
+			socket.sendMessage(toSend);
 			
 		} catch (Exception e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-		
-		newResponse("123456", "a");
-		newResponse("987654", "a");
 	}
 	
 	public void deactivatePoll() {
 		try {
-			if (sessionID.contentEquals("")) {
-				return;
-			}
-			
-			List<NameValuePair> params = new ArrayList<NameValuePair>();
-			
-			params.add(new BasicNameValuePair("pollID", pollID));
-			
-			URI uri = new URIBuilder()
-					.setScheme("http")
-					.setHost("54.153.95.213")
-					.setPort(3001)
-					.setPath("/deactivatePoll")
-					.addParameters(params)
-					.build();
-			
-			CloseableHttpClient httpClient = HttpClients.createDefault();
-			HttpGet httpGet = new HttpGet(uri);
-			
-			CloseableHttpResponse httpResponse = httpClient.execute(httpGet);
-			
-			System.out.println(EntityUtils.toString(httpResponse.getEntity()));
-			System.out.println(httpResponse.getStatusLine());
-			
-			httpClient.close(); 
-			
-			pollID = "";
+			// Create json packet
+			String toSend = "{\"type\" : \"deactivatePoll\", \"courseID\" : \"" + courseID + "\"}";
+
+			socket.sendMessage(toSend);
 			
 		} catch (Exception e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+			e.printStackTrace();  
 		}
 	}
-	
 	public void createSession() {
 		try {
-			List<NameValuePair> params = new ArrayList<NameValuePair>();
+			String jsonSetup = "{\"type\": \"setCourseID\", \"courseID\": \"" + courseID + "\"}";
 
-			System.err.println("CourseID: " + courseID);
-			params.add(new BasicNameValuePair("sessionStartTime", "" + System.currentTimeMillis()));
-			params.add(new BasicNameValuePair("sessionCourseID", courseID));
+            // send message to websocket
+            socket.sendMessage(jsonSetup);
 			
-			URI uri = new URIBuilder()
-					.setScheme("http")
-					.setHost("54.153.95.213")
-					.setPort(3001)
-					.setPath("/createSession")
-					.addParameters(params)
-					.build();
+			// Create json packet
+			String toSend = "{\"type\" : \"createSession\", \"courseID\" : \"" + courseID + "\"}";
+
+			socket.sendMessage(toSend);
 			
-			CloseableHttpClient httpClient = HttpClients.createDefault();
-			HttpGet httpGet = new HttpGet(uri);
-			
-			CloseableHttpResponse httpResponse = httpClient.execute(httpGet);
-			
-			String response = EntityUtils.toString(httpResponse.getEntity());
-			
-			System.out.println(response);
-		      
-			// https://www.tutorialspoint.com/json/json_java_example.htm
-			JSONParser parser = new JSONParser();
-			
-			JSONObject arr = (JSONObject)parser.parse(response);
-			
-			if((boolean)arr.get("success")) {
-				JSONObject obj = (JSONObject)arr.get("data");
-				
-				sessionID = (String)obj.get("sessionID");
-				sessionNum = (long)obj.get("sessionNum");
-				slideCount = (long) 0;
-				
-				System.out.println(sessionID);
-			}
-			
-			httpClient.close();
 		} catch (Exception e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 	}
 	
 	public void resumeSession() {
 		try {
-			List<NameValuePair> params = new ArrayList<NameValuePair>();
-			
-			params.add(new BasicNameValuePair("courseID", courseID));
-			
-			URI uri = new URIBuilder()
-					.setScheme("http")
-					.setHost("54.153.95.213")
-					.setPort(3001)
-					.setPath("/resumeSession")
-					.addParameters(params)
-					.build();
-			
-			CloseableHttpClient httpClient = HttpClients.createDefault();
-			HttpGet httpGet = new HttpGet(uri);
-			
-			CloseableHttpResponse httpResponse = httpClient.execute(httpGet);
-			
-			String response = EntityUtils.toString(httpResponse.getEntity());
+			// Create json packet
+			String toSend = "{\"type\" : \"resumeSession\", \"courseID\" : \"" + courseID + "\"}";
 
-			System.err.println("CourseID: " + courseID);
-			System.out.println(response);
-		      
-			// https://www.tutorialspoint.com/json/json_java_example.htm
-			JSONParser parser = new JSONParser();
+			socket.sendMessage(toSend);
 			
-			JSONObject arr = (JSONObject)parser.parse(response);
-//			JSONObject obj = (JSONObject)arr.get("data");
-			
-			sessionID = (String)arr.get("sessionID");
-			sessionNum = (long)arr.get("sessionNum");
-			slideCount = (long)arr.get("slideCount");
-			
-			
-			System.out.println(sessionID);
-			
-			httpClient.close();
 		} catch (Exception e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 	}
 	
 	public void activateSession() {
 		try {
-			if (sessionID.contentEquals("")) {
-				return;
-			}
-			
-			List<NameValuePair> params = new ArrayList<NameValuePair>();
-			
-			params.add(new BasicNameValuePair("sessionID", sessionID));
-			
-			URI uri = new URIBuilder()
-					.setScheme("http")
-					.setHost("54.153.95.213")
-					.setPort(3001)
-					.setPath("/activateSession")
-					.addParameters(params)
-					.build();
-			
-			CloseableHttpClient httpClient = HttpClients.createDefault();
-			HttpGet httpGet = new HttpGet(uri);
-			
-			CloseableHttpResponse httpResponse = httpClient.execute(httpGet);
-			
-			System.out.println(EntityUtils.toString(httpResponse.getEntity()));
-			System.out.println(httpResponse.getStatusLine());
-			
-			httpClient.close();
+			// Create json packet
+			String toSend = "{\"type\" : \"activateSession\", \"sessionID\" : \"" + sessionID + "\"}";
+
+			socket.sendMessage(toSend);
 			
 		} catch (Exception e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 	}
 
 	public void deactivateSession() {
 		try {
-			if (sessionID.contentEquals("")) {
-				return;
-			}
-			
-			List<NameValuePair> params = new ArrayList<NameValuePair>();
-			
-			params.add(new BasicNameValuePair("sessionID", sessionID));
-			
-			URI uri = new URIBuilder()
-					.setScheme("http")
-					.setHost("54.153.95.213")
-					.setPort(3001)
-					.setPath("/deactivateSession")
-					.addParameters(params)
-					.build();
-			
-			CloseableHttpClient httpClient = HttpClients.createDefault();
-			HttpGet httpGet = new HttpGet(uri);
-			
-			CloseableHttpResponse httpResponse = httpClient.execute(httpGet);
-			
-			System.out.println(EntityUtils.toString(httpResponse.getEntity()));
-			System.out.println(httpResponse.getStatusLine());
-			
-			httpClient.close(); 
+			// Create json packet
+			String toSend = "{\"type\" : \"deactivateSession\", \"courseID\" : \"" + courseID + "\"}";
+
+			socket.sendMessage(toSend);
 			
 		} catch (Exception e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 	}
@@ -750,6 +532,7 @@ public class WebController {
 		}
 	}
 	
+	// the shouldGetNew field is used to make sure that USBController is not asking for it's own votes.
 	public int[] getVotes(boolean shouldGetNew) {
 		if(!shouldGetNew) {
 			return allVotes;
@@ -759,69 +542,11 @@ public class WebController {
 			if (pollID.contentEquals("")) {
 				return null;
 			}
+			// Create json packet
+			String toSend = "{\"type\" : \"getPollData\", \"pollID\" : \"" + pollID + "\"}";
+
+			socket.sendMessage(toSend);
 			
-			List<NameValuePair> params = new ArrayList<NameValuePair>();
-			
-			params.add(new BasicNameValuePair("pollID", pollID));
-			
-			URI uri = new URIBuilder()
-					.setScheme("http")
-					.setHost("54.153.95.213")
-					.setPort(3001)
-					.setPath("/getPollData")
-					.addParameters(params)
-					.build();
-			
-			CloseableHttpClient httpClient = HttpClients.createDefault();
-			HttpGet httpGet = new HttpGet(uri);
-			
-			CloseableHttpResponse httpResponse = httpClient.execute(httpGet);
-			
-			String response = EntityUtils.toString(httpResponse.getEntity());
-			
-			System.err.println(response);
-		      
-			// https://www.tutorialspoint.com/json/json_java_example.htm
-			JSONParser parser = new JSONParser();
-			
-			JSONObject obj = (JSONObject)parser.parse(response);
-			JSONObject data = (JSONObject)obj.get("data");
-			JSONArray arr = (JSONArray)data.get("votes");
-			
-			allVotes = new int[] {0, 0, 0, 0, 0};
-			
-			if(arr != null) {
-				for(int i = 0; i < arr.size(); i++) {
-					JSONObject iObj = (JSONObject)arr.get(i);
-					String vote = (String)iObj.get("studentVote");
-					System.out.println("Student's vote: " + vote);
-					
-					switch(vote) {
-					case "a":
-					case "A":
-						allVotes[0]++;
-						break;
-					case "b":
-					case "B":
-						allVotes[1]++;
-						break;
-					case "c":
-					case "C":
-						allVotes[2]++;
-						break;
-					case "d":
-					case "D":
-						allVotes[3]++;
-						break;
-					case "e":
-					case "E":
-						allVotes[4]++;
-						break;
-				}
-				}
-			}
-			
-			httpClient.close();
 		} catch(Exception e) {
 			e.printStackTrace();
 		}
@@ -867,11 +592,14 @@ public class WebController {
 	 * I found this stackoverflow post which helped solve the OEAP padding problem:
 	 * https://stackoverflow.com/questions/46916718/oaep-padding-error-when-decrypting-data-in-c-sharp-that-was-encrypted-in-javascr
 	 */
-	public String getEncrypted(String data) {
+	public String getEncrypted(char[] data) {
 		String out = "";
 		
 		try {
-			byte[] bytes = data.getBytes();
+			byte[] bytes = new byte[data.length];
+			for(int i = 0; i < data.length; i ++) {
+				bytes[i] = (byte) data[i];
+			}
 			
 			// read information for key
 			StringReader keyReader = new StringReader(RSA_PUBLIC);
@@ -903,51 +631,202 @@ public class WebController {
 	 */
 	public boolean newResponse(String studentID, String vote) {
 		try {
-			System.out.println("Sending vote to server.");
-			
 			// Create json packet
 			String toSend = "{\"type\":\"vote\", \"iClicker\": \"" + studentID + "\", \"vote\": \""
 					+ vote + "\", \"courseID\": \"" + courseID + "\"}";
 
-			if(socket != null) {
-				socket.sendMessage(toSend);
-			}
-			else {
-				System.err.println("SOCKET NOT OPENED ON WEBCONTROLLER SIDE!!!!!!!!!");
-				StringEntity stringEntity = new StringEntity(toSend);
-				
-				// Establish connection
-				CloseableHttpClient httpClient = HttpClients.createDefault();
-				HttpPost httpPost = new HttpPost("http://54.153.95.213:3001/vote");
-				httpPost.setHeader("Accept", "application/json");
-				httpPost.setHeader("Content-type", "application/json");
-				httpPost.setEntity(stringEntity);
-				
-				// send the packet
-				CloseableHttpResponse httpResponse = httpClient.execute(httpPost);
-				
-				String response = EntityUtils.toString(httpResponse.getEntity());
-				
-				//System.out.println(response);
-			      
-				// https://www.tutorialspoint.com/json/json_java_example.htm
-				JSONParser parser = new JSONParser();
-				
-				JSONObject full = (JSONObject) parser.parse(response);
-				
-				boolean success = (boolean) full.get("success");
-				
-				System.out.println(success);
-				
-				httpClient.close();
-			}
+			
+			socket.sendMessage(toSend);
+			
+			return true;
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
 		return false;
 	}
 	
-	public void setSocket(WebsocketClientEndpoint socket) {
-		this.socket = socket;
+	/**
+	 * Sets up a socket connection with the server and then waits for commands issued
+	 * from the website and acts upon them accordingly.
+	 * 
+	 * Much of this -- including the WebsocketClientEndpoint class -- was taken from: 
+	 * https://stackoverflow.com/questions/26452903/javax-websocket-client-simple-example
+	 */
+	public void SetupNotificationSocket() {
+		Thread t = new Thread(new Runnable() { public void run() {
+	        try {
+	        	// open websocket
+	    		try {
+	    			socket = new WebsocketClientEndpoint(new URI(SOCKET_SERVER_HOSTNAME));
+	    		} catch (Exception e) {
+	    			e.printStackTrace();
+	    		}
+	        	
+				while (!loggedIn) {
+					Thread.sleep(100);
+				}
+
+	            // add listener
+	            socket.addMessageHandler(new WebsocketClientEndpoint.MessageHandler() {
+	                public void handleMessage(String message) {
+
+	                    System.err.println("Socket: " + message);
+	                    JSONParser parser = new JSONParser();
+	        			try {
+		        			JSONObject obj = (JSONObject) parser.parse(message);
+		        			String updateType = (String)obj.get("type");
+		        			
+		        			if(updateType.contentEquals("update")) {
+		        				String updateFrom = (String) obj.get("updateFrom");
+		        				JSONObject data = (JSONObject) obj.get("data");
+		        				
+			        			if(updateFrom.contentEquals("pollStatus")) {
+			        				boolean pollStatus = (boolean)data.get("pollStatus");
+			        				controlWindow.togglePoll(pollStatus, true);
+			        			}
+			        			else if(updateFrom.contentEquals("pollDisplayStatus")) {
+			        				boolean displayIsOpen = (boolean)data.get("pollDisplayStatus");
+			        				controlWindow.toggleDisplay(displayIsOpen);
+			        			}
+			        			else if(updateFrom.contentEquals("sessionStatus")) {
+			        				boolean shouldEnd = !((boolean) data.get("sessionStatus"));
+			        				if(shouldEnd) {
+				        				if(endingActiveSession) {
+				        					endingActiveSession = false;
+				        				}
+				        				else {
+				        					System.exit(0);
+				        				}
+			        				}
+			        			}
+		        			}
+		        			else if(updateType.contentEquals("response")) {
+		        				String responseFrom = (String) obj.get("responseFrom");
+		        				JSONObject data = (JSONObject) obj.get("data");
+		        				
+		        				if(responseFrom.contentEquals("createSession") || responseFrom.contentEquals("resumeSession")) {
+		        					sessionID = (String) data.get("sessionID");
+		        				}
+		        				else if (responseFrom.contentEquals("createPoll")) {
+		        					pollID = (String) data.get("pollID");
+		        				}
+		        				else if (responseFrom.contentEquals("deactivateSession")) {
+		        					currentCourse.setSession("");
+		        					selectorSetActiveSession(false);
+		        				}
+		        				else if (responseFrom.contentEquals("getPollData")) {
+		        					JSONArray arr = (JSONArray) data.get("votes");
+		        					
+		        					if(arr != null) {
+			        					allVotes = new int[] {0, 0, 0, 0, 0};
+		        						for(int i = 0; i < arr.size(); i++) {
+		        							JSONObject student = (JSONObject)arr.get(i);
+		        							String vote = (String) student.get("studentVote");
+		        							
+		        							switch(vote) {
+		        							case "a":
+		        							case "A":
+		        								allVotes[0]++;
+		        								break;
+		        							case "b":
+		        							case "B":
+		        								allVotes[1]++;
+		        								break;
+		        							case "c":
+		        							case "C":
+		        								allVotes[2]++;
+		        								break;
+		        							case "d":
+		        							case "D":
+		        								allVotes[3]++;
+		        								break;
+		        							case "e":
+		        							case "E":
+		        								allVotes[4]++;
+		        								break;
+		        							}
+		        						}
+		        					}
+		        				}
+		        				else if(responseFrom.contentEquals("login")) {
+		        				
+		        				}
+		                	}
+	        			} catch(Exception e) {
+	        				e.printStackTrace();
+	        			}
+		            }});
+			
+		        } catch (Exception e) {
+		        	e.printStackTrace();
+		        }
+			}
+		});
+		t.start();
+	}
+	
+	private void login(JSONObject loginResponse) {// https://www.tutorialspoint.com/json/json_java_example.htm
+		
+		// successfully logged in
+		if(loggedIn) {
+			// ask if you'd like to save the creds if their different
+			String savedUsername = credController.getUsername();
+			String savedPassword = credController.getPassword();
+			if(!sentUsername.contentEquals(savedUsername) || !sentEncryptedPassword.contentEquals(savedPassword)) {
+				Object[] options = {"Yes", "No"};
+				int choice = JOptionPane.showOptionDialog(displayFrame,
+						"Would you like to save your credentials?",
+						"Save credentials?",
+						JOptionPane.YES_NO_CANCEL_OPTION, 
+						JOptionPane.QUESTION_MESSAGE, 
+						null,
+						options, 
+						options[0]);
+				
+				if(choice == JOptionPane.YES_OPTION) {
+					credController.saveCreds(sentUsername, sentEncryptedPassword);;
+				}
+			}
+			
+			// fill in courses
+			JSONObject data = (JSONObject) loginResponse.get("data");
+			JSONArray JSONCourses = (JSONArray) data.get("courses");
+			
+			JSONObject account = (JSONObject) data.get("account");
+			instructorID = (String) account.get("accountID");
+			
+			courseSelector.removeAllItems();
+			for(int i = 0; i < JSONCourses.size(); i ++) {
+				Object obj = JSONCourses.get(i);
+				
+				// only look at JSONObjects
+				if(!obj.getClass().equals(data.getClass())) {
+					break;
+				}
+				
+				JSONObject course = (JSONObject) obj;
+				
+				String courseName = (String) course.get("courseName");
+				String courseID = (String) course.get("courseID");
+				String activeSessionID = (String) course.get("sessionID");
+			
+				Course toAdd = new Course(courseName, courseID, activeSessionID);
+				courses.add(toAdd);
+				
+				courseSelector.addItem(courseName);
+			}
+			
+			// show the course selection menu
+			CardLayout layout = (CardLayout)displayPanel.getLayout();
+			layout.show(displayPanel, "Courses");
+		}
+		// error logging in
+		else {
+			JSONObject error = (JSONObject) loginResponse.get("error");
+			JOptionPane.showMessageDialog(displayFrame,
+				    (String) error.get("message"),
+				    "Login Error",
+				    JOptionPane.ERROR_MESSAGE);
+		}
 	}
 }

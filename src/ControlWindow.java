@@ -52,9 +52,6 @@ public class ControlWindow extends JFrame {
 	public static final int DISPLAY_RESULTS = 1;
 	public static final int CLOSE_BUTTON = -1;
 
-	public static final String SOCKET_SERVER_HOSTNAME = "ws://54.153.95.213:3001";
-	public static final int SOCKET_SERVER_PORT = 3001;
-	public static final int SOCKET_TIMEOUT = 0;
 	
 	//Boolean for whether or not USB is connected
 	private static boolean connected = false;
@@ -71,9 +68,6 @@ public class ControlWindow extends JFrame {
 	
 	private boolean shouldStart = true;
 	
-	public WebsocketClientEndpoint clientEndPoint;
-	private boolean firstMessage = true; // there's a message sent from the server once connected; don't want to start a poll accidentally via this message
-	
 	/**
 	 * Used to initialize the display's variables.
 	 */
@@ -81,16 +75,9 @@ public class ControlWindow extends JFrame {
 		this.display = display;
 		this.usb = usb;
 		this.web = web;
+		web.setControlWindow(this);
 		
 		display.setController(this);
-		
-        // open websocket
-		try {
-			clientEndPoint = new WebsocketClientEndpoint(new URI(SOCKET_SERVER_HOSTNAME));
-			web.setSocket(clientEndPoint);
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
 		
 		begin();
 	}
@@ -163,8 +150,6 @@ public class ControlWindow extends JFrame {
 		
 		//Open the display
 		//openDisplay();
-		
-		SetupNotificationSocket();
 	}
 	
 	private ActionListener OpenClose = new ActionListener() {
@@ -209,21 +194,20 @@ public class ControlWindow extends JFrame {
 	};
 	
 	public void StartStop() {
-		togglePoll(shouldStart);
+		togglePoll(shouldStart, false);
 		shouldStart = !shouldStart;
 	}
 	
-	public void togglePoll(boolean state) {
+	public void togglePoll(boolean state, boolean commandFromWeb) {
 		if(state) {
 			display.nextQuestion();
 			
 			usb.startPoll();
 			
-//			web.createSession();
-//			web.activateSession();
-			
-			web.createPoll();
-			web.activatePoll();
+			if(web.isSessionStarted() && !commandFromWeb) {
+				web.createPoll();
+				web.activatePoll();
+			}
 	
 			setStartStopText("Stop");
 			numResponsesText.setText("0");
@@ -231,11 +215,17 @@ public class ControlWindow extends JFrame {
 		else {
 			usb.stopPoll();
 			
-			web.deactivatePoll();
+			if(web.isSessionStarted() && !commandFromWeb) {
+				web.deactivatePoll();
+			}
 			
 			setStartStopText("Start");
 			numResponsesText.setText("-");
 		}
+	}
+	
+	public boolean isPollActive() {
+		return !shouldStart;
 	}
 	
 	public void setStartStopText(String str) {
@@ -257,66 +247,5 @@ public class ControlWindow extends JFrame {
 	public static void setConnected(boolean connectedArg) {
 	}
 	
-	/**
-	 * Sets up a socket connection with the server and then waits for commands issued
-	 * from the website and acts upon them accordingly.
-	 * 
-	 * Much of this -- including the WebsocketClientEndpoint class -- was taken from: 
-	 * https://stackoverflow.com/questions/26452903/javax-websocket-client-simple-example
-	 */
-	public void SetupNotificationSocket() {
-		Thread t = new Thread(new Runnable() { public void run() {
-	        try {
-				while (!web.isCourseSelected()) {
-					Thread.sleep(100);
-				}
-
-	            // add listener
-	            clientEndPoint.addMessageHandler(new WebsocketClientEndpoint.MessageHandler() {
-	                public void handleMessage(String message) {
-	                	try {
-	                    System.err.println("Socket: " + message);
-	                    JSONParser parser = new JSONParser();
-	        			
-	        			JSONObject obj = (JSONObject)parser.parse(message);
-	        			String updateType = (String)obj.get("type");
-	        			
-	        			if(firstMessage) {
-        					firstMessage = false;
-        				}
-	        			else {
-		        			if(updateType.contentEquals("pollActivityChanged")) {
-		        				boolean pollStatus = (boolean)obj.get("pollStatus");
-		        				togglePoll(pollStatus);
-		        			
-		        			}
-		        			else if(updateType.contentEquals("pollDisplayChaned")) { // Changed is misspelled when it comes from the socket
-		        				boolean displayIsOpen = (boolean)obj.get("displayStatus");
-		        				toggleDisplay(displayIsOpen);
-		        				
-		        			}
-	        			}
-	        			
-	                	} catch(Exception e) {
-	                		e.printStackTrace();
-	                	}
-	                }
-	            });
-	            
-	            String courseID = web.getCourseID();
-				String jsonSetup = "{\"type\": \"setCourseID\", \"courseID\": \"" + courseID + "\"}";
-
-	            // send message to websocket
-	            clientEndPoint.sendMessage(jsonSetup);
-
-	            System.err.println("Message sent!!!");
-
-	        } catch (Exception e) {
-	        	e.printStackTrace();
-	        }
-		}});
-		
-		t.start();
-	}
 }
 
