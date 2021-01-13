@@ -1,12 +1,12 @@
 
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import java.util.ArrayList;
+//import java.awt.event.ActionEvent;
+//import java.awt.event.ActionListener;
+//import java.util.ArrayList;
 import java.awt.*;
 import javax.swing.*;
-import javax.swing.text.SimpleAttributeSet;
-import javax.swing.text.StyleConstants;
-import javax.swing.text.StyledDocument;
+//import javax.swing.text.SimpleAttributeSet;
+//import javax.swing.text.StyleConstants;
+//import javax.swing.text.StyledDocument;
 
 public class VoteStatus extends JFrame {
 

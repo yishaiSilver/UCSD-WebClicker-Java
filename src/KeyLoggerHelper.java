@@ -5,7 +5,7 @@ import java.awt.GraphicsEnvironment;
 import java.awt.HeadlessException;
 import java.awt.Rectangle;
 import java.awt.Robot;
-import java.awt.Shape;
+//import java.awt.Shape;
 import java.awt.Toolkit;
 import java.awt.image.BufferedImage;
 import java.io.BufferedReader;
@@ -14,9 +14,9 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 
 import javax.imageio.ImageIO;
-import javax.swing.JButton;
+//import javax.swing.JButton;
 import javax.swing.JFrame;
-import javax.swing.JTextPane;
+//import javax.swing.JTextPane;
 
 import org.apache.http.HttpEntity;
 import org.apache.http.client.methods.CloseableHttpResponse;
@@ -32,7 +32,7 @@ import org.jnativehook.NativeHookException;
 import org.jnativehook.keyboard.NativeKeyEvent;
 import org.jnativehook.keyboard.NativeKeyListener;
 
-import com.google.api.client.http.HttpResponse;
+//import com.google.api.client.http.HttpResponse;
 import com.sun.jna.Native;
 import com.sun.jna.platform.win32.User32;
 import com.sun.jna.platform.win32.WinDef;
@@ -54,7 +54,8 @@ public class KeyLoggerHelper extends JFrame implements NativeKeyListener {
 	public String imageUploadSite, lecture, courseName, instructorID;
 
 	private static final int MAX_TITLE_LENGTH = 1024;
-	private boolean ctrl = false, shift = false, s = false, v = false;
+	private boolean ctrl = false, shift = false; 
+//			s = false, v = false;
 	public int screen_shot_number;
 	public int current_number;
 

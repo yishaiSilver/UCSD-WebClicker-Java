@@ -1,11 +1,3 @@
-import org.apache.http.NameValuePair;
-import org.apache.http.entity.*;
-import org.apache.http.client.methods.CloseableHttpResponse;
-import org.apache.http.client.methods.HttpPost;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClients;
-import org.apache.http.message.BasicNameValuePair;
-import org.apache.http.util.EntityUtils;
 import org.apache.log4j.BasicConfigurator;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
 import org.bouncycastle.crypto.AsymmetricBlockCipher;
@@ -22,25 +14,10 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.FocusEvent;
 import java.awt.event.FocusListener;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.io.StringReader;
-import java.net.InetSocketAddress;
-import java.net.Socket;
 import java.net.URI;
-import java.net.URISyntaxException;
-
-import com.google.api.core.ApiFuture;
-import com.google.cloud.firestore.Firestore;
-import com.google.cloud.firestore.QueryDocumentSnapshot;
-import com.google.cloud.firestore.QuerySnapshot;
-import com.google.cloud.firestore.SetOptions;
-import com.google.cloud.firestore.WriteResult;
-
-import purejavahidapi.DeviceRemovalListener;
-import purejavahidapi.HidDevice;
-import purejavahidapi.HidDeviceInfo;
-import purejavahidapi.InputReportListener;
-import purejavahidapi.PureJavaHidApi;
-
 import org.json.simple.JSONObject;
 import org.json.simple.JSONArray;
 import org.json.simple.parser.JSONParser;
@@ -48,10 +25,6 @@ import org.json.simple.parser.JSONParser;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
 
 import javax.swing.JButton;
 import javax.swing.JComboBox;
@@ -75,8 +48,8 @@ public class WebController {
 			+ "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 	public static final int ID_LENGTH = 20;
 	
-	private static final int WINDOW_WIDTH = 500;
-	private static final int WINDOW_HEIGHT = 300;
+//	private static final int WINDOW_WIDTH = 500;
+//	private static final int WINDOW_HEIGHT = 300;
 	private static final String WINDOW_TITLE = "Student Responses";
 	
 	private int votesA = 0;
@@ -121,9 +94,9 @@ public class WebController {
 	public WebsocketClientEndpoint socket;
 	public ControlWindow controlWindow;
 	
-	private boolean firstMessage = true;
+//	private boolean firstMessage = true;
 	
-	private boolean loggedIn = false;
+//	private boolean loggedIn = false;
 	private String sentUsername;
 	private String sentEncryptedPassword;
 	
@@ -263,6 +236,14 @@ public class WebController {
 		// Center the display on the screen
 		displayFrame.setLocationRelativeTo(null);
 		
+		// Add a notification for continuing in USB only mode
+		displayFrame.addWindowListener(new WindowAdapter() {
+			@Override
+			public void windowClosing(WindowEvent e) {
+				JOptionPane.showMessageDialog(displayFrame, "Continuing with USB only.");
+			}
+		});
+		
 		//displayFrame.pack();
 		displayFrame.validate();
 		displayFrame.setVisible(true);
@@ -272,6 +253,10 @@ public class WebController {
 	
 	public void setControlWindow(ControlWindow controlWindow) {
 		this.controlWindow = controlWindow;
+	}
+	
+	public JFrame getDisplayFrame() {
+		return displayFrame;
 	}
 	
 	private boolean login(String username, char[] password) {
@@ -297,6 +282,7 @@ public class WebController {
 			
 			return true;
 		} catch (Exception e) {
+			JOptionPane.showMessageDialog(displayFrame, "A connection has not been established yet.\nPlease try again.");
 			e.printStackTrace();
 		}
 		return false;
@@ -326,25 +312,30 @@ public class WebController {
 	private ActionListener selectedCourse = new ActionListener() {
 		@Override
 		public void actionPerformed(ActionEvent e) {
-			courseName = (String)courseSelector.getSelectedItem();
-			
-			for(Course course : courses) {
-				if(course.getName().equals(courseName)) {
-					courseID = course.getID();
-					sessionID = course.getSession();
-					selectorSetActiveSession(course.hasActiveSession());
-					
-					currentCourse = course;
-					break;
-				}
-			}
+			updateCourseSelector();
 		}
 	};
 	
-	private void UpdateCourseStatus(String courseName, String sessionID) {
+	private void UpdateCourseStatus(String pCourseID, String pSessionID) {
 		for(Course course : courses) {
-			if(course.getName().contentEquals(courseName)) {
-				course.setSession(sessionID);
+			if(course.getID().contentEquals(pCourseID)) {
+				course.setSession(pSessionID);
+				updateCourseSelector();
+				break;
+			}
+		}
+	}
+	
+	public void updateCourseSelector() {
+		courseName = (String)courseSelector.getSelectedItem();
+		System.out.println("Current course: " + courseSelector.getSelectedItem());
+		
+		for(Course course : courses) {
+			if(course.getName().equals(courseName)) {
+				selectorSetActiveSession(course.hasActiveSession());
+				
+				currentCourse = course;
+				break;
 			}
 		}
 	}
@@ -366,18 +357,18 @@ public class WebController {
 	
 	private boolean shouldEndActiveSession = false;
 	private boolean sessionCreated = false;
-	private boolean endingActiveSession = true;
 	private ActionListener newSession = new ActionListener() {
 		@Override
 		public void actionPerformed(ActionEvent e) {
 			if(shouldEndActiveSession) {
 				deactivateSession();
-				endingActiveSession = true;
 			}
 			else {	
 				if(!sessionCreated) {
-					
 					courseSelected = true;
+					
+					courseID = currentCourse.getID();
+					sessionID = currentCourse.getSession();
 					System.err.println("CourseID: " + courseID);
 					
 					System.out.println(sessionID);
@@ -405,6 +396,7 @@ public class WebController {
 		@Override
 		public void actionPerformed(ActionEvent e) {
 			resumeSession();
+			courseSelected = true;
 			displayFrame.setVisible(false);
 		}
 	};
@@ -453,6 +445,8 @@ public class WebController {
 	}
 	public void createSession() {
 		try {
+			courseID = currentCourse.getID();
+			
 			String jsonSetup = "{\"type\": \"setCourseID\", \"courseID\": \"" + courseID + "\"}";
 
             // send message to websocket
@@ -470,6 +464,8 @@ public class WebController {
 	
 	public void resumeSession() {
 		try {
+			courseID = currentCourse.getID();
+			
 			// Create json packet
 			String toSend = "{\"type\" : \"resumeSession\", \"courseID\" : \"" + courseID + "\"}";
 
@@ -494,8 +490,34 @@ public class WebController {
 
 	public void deactivateSession() {
 		try {
+			courseID = currentCourse.getID();
+			
 			// Create json packet
 			String toSend = "{\"type\" : \"deactivateSession\", \"courseID\" : \"" + courseID + "\"}";
+
+			socket.sendMessage(toSend);
+			
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
+	
+	public void showPoll() {
+		try {
+			// Create json packet
+			String toSend = "{\"type\" : \"showPoll\", \"courseID\" : \"" + courseID + "\"}";
+
+			socket.sendMessage(toSend);
+			
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
+	
+	public void hidePoll() {
+		try {
+			// Create json packet
+			String toSend = "{\"type\" : \"hidePoll\", \"courseID\" : \"" + courseID + "\"}";
 
 			socket.sendMessage(toSend);
 			
@@ -544,7 +566,7 @@ public class WebController {
 			}
 			// Create json packet
 			String toSend = "{\"type\" : \"getPollData\", \"pollID\" : \"" + pollID + "\"}";
-
+			System.out.println(toSend);
 			socket.sendMessage(toSend);
 			
 		} catch(Exception e) {
@@ -659,12 +681,9 @@ public class WebController {
 	    		try {
 	    			socket = new WebsocketClientEndpoint(new URI(SOCKET_SERVER_HOSTNAME));
 	    		} catch (Exception e) {
+					JOptionPane.showMessageDialog(displayFrame, "Connection failed.");
 	    			e.printStackTrace();
 	    		}
-	        	
-				while (!loggedIn) {
-					Thread.sleep(100);
-				}
 
 	            // add listener
 	            socket.addMessageHandler(new WebsocketClientEndpoint.MessageHandler() {
@@ -676,26 +695,41 @@ public class WebController {
 		        			JSONObject obj = (JSONObject) parser.parse(message);
 		        			String updateType = (String)obj.get("type");
 		        			
-		        			if(updateType.contentEquals("update")) {
+		        			if(updateType.contentEquals("update") && courseSelected) {
 		        				String updateFrom = (String) obj.get("updateFrom");
 		        				JSONObject data = (JSONObject) obj.get("data");
+		        				String updateCourseID = (String) data.get("courseID");
 		        				
+		        				if(updateCourseID == null) {
+		        					return;
+		        				}
 			        			if(updateFrom.contentEquals("pollStatus")) {
-			        				boolean pollStatus = (boolean)data.get("pollStatus");
-			        				controlWindow.togglePoll(pollStatus, true);
+			        				boolean coursesMatch = updateCourseID.contentEquals(currentCourse.getID());
+			        				if(coursesMatch) {
+				        				boolean pollStatus = (boolean)data.get("pollStatus");
+				        				controlWindow.togglePoll(pollStatus, true);
+				        				
+				        				if(pollStatus) {
+				        					pollID = (String) data.get("pollID");
+				        				}
+			        				}
 			        			}
 			        			else if(updateFrom.contentEquals("pollDisplayStatus")) {
-			        				boolean displayIsOpen = (boolean)data.get("pollDisplayStatus");
-			        				controlWindow.toggleDisplay(displayIsOpen);
+			        				boolean coursesMatch = updateCourseID.contentEquals(currentCourse.getID());
+			        				if(coursesMatch) {
+				        				boolean displayIsOpen = (boolean)data.get("pollDisplayStatus");
+				        				controlWindow.toggleDisplay(displayIsOpen, true);
+			        				}
 			        			}
 			        			else if(updateFrom.contentEquals("sessionStatus")) {
 			        				boolean shouldEnd = !((boolean) data.get("sessionStatus"));
-			        				if(shouldEnd) {
-				        				if(endingActiveSession) {
-				        					endingActiveSession = false;
-				        				}
-				        				else {
-				        					System.exit(0);
+			        				if(updateCourseID != null) {
+				        				boolean coursesMatch = updateCourseID.contentEquals(currentCourse.getID());
+				        				if(shouldEnd && coursesMatch) {
+					        				System.exit(0);
+				        				} else {
+				        					String updateSessionID = (String) data.get("sessionID");
+				        					UpdateCourseStatus(updateCourseID, updateSessionID);
 				        				}
 			        				}
 			        			}
@@ -749,7 +783,12 @@ public class WebController {
 		        					}
 		        				}
 		        				else if(responseFrom.contentEquals("login")) {
-		        				
+		        					if((boolean) obj.get("success")) {
+		        						login(true, (JSONObject)obj.get("data"));
+		        					}
+		        					else {
+		        						login(false, (JSONObject)obj.get("error"));
+		        					}
 		        				}
 		                	}
 	        			} catch(Exception e) {
@@ -765,7 +804,7 @@ public class WebController {
 		t.start();
 	}
 	
-	private void login(JSONObject loginResponse) {// https://www.tutorialspoint.com/json/json_java_example.htm
+	private void login(boolean loggedIn, JSONObject loginResponse) {// https://www.tutorialspoint.com/json/json_java_example.htm
 		
 		// successfully logged in
 		if(loggedIn) {
@@ -789,20 +828,19 @@ public class WebController {
 			}
 			
 			// fill in courses
-			JSONObject data = (JSONObject) loginResponse.get("data");
-			JSONArray JSONCourses = (JSONArray) data.get("courses");
+			JSONArray JSONCourses = (JSONArray) loginResponse.get("courses");
 			
-			JSONObject account = (JSONObject) data.get("account");
+			JSONObject account = (JSONObject) loginResponse.get("account");
 			instructorID = (String) account.get("accountID");
 			
 			courseSelector.removeAllItems();
 			for(int i = 0; i < JSONCourses.size(); i ++) {
 				Object obj = JSONCourses.get(i);
 				
-				// only look at JSONObjects
-				if(!obj.getClass().equals(data.getClass())) {
-					break;
-				}
+//				// only look at JSONObjects
+//				if(!obj.getClass().equals(loginResponse.getClass())) {
+//					break;
+//				}
 				
 				JSONObject course = (JSONObject) obj;
 				
@@ -816,15 +854,18 @@ public class WebController {
 				courseSelector.addItem(courseName);
 			}
 			
+			// listen for updates
+			socket.sendMessage("{\"type\" : \"listenCourses\"}");
+			
 			// show the course selection menu
 			CardLayout layout = (CardLayout)displayPanel.getLayout();
 			layout.show(displayPanel, "Courses");
 		}
 		// error logging in
 		else {
-			JSONObject error = (JSONObject) loginResponse.get("error");
+			String error = (String) loginResponse.get("message");
 			JOptionPane.showMessageDialog(displayFrame,
-				    (String) error.get("message"),
+				    error,
 				    "Login Error",
 				    JOptionPane.ERROR_MESSAGE);
 		}

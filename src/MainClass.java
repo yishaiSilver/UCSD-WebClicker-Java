@@ -12,7 +12,7 @@ public class MainClass {
 		
 		ControlWindow controller = new ControlWindow(display, usb, web);
 		
-		boolean startedKeyLogger = false;
+//		boolean startedKeyLogger = false;
 		
 		try {
 			while(true) {

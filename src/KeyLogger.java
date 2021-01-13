@@ -1,8 +1,8 @@
 import java.io.File;
-
-import javax.swing.JButton;
-import javax.swing.JFrame;
-import javax.swing.JTextPane;
+//
+//import javax.swing.JButton;
+//import javax.swing.JFrame;
+//import javax.swing.JTextPane;
 
 public class KeyLogger implements Runnable {
 

@@ -6,32 +6,16 @@
  * @version 1.0
  * @since 2019-08-19
  */
-import java.awt.Color;
-import javax.websocket.*;
-
-import org.json.simple.JSONArray;
-import org.json.simple.JSONObject;
-import org.json.simple.parser.JSONParser;
 
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
-import java.io.BufferedReader;
-import java.io.DataOutputStream;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.io.PrintWriter;
-import java.net.InetSocketAddress;
-import java.net.Socket;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.util.ArrayList;
 import java.awt.*;
 import javax.swing.*;
 import javax.swing.text.SimpleAttributeSet;
 import javax.swing.text.StyleConstants;
-import javax.swing.text.StyledDocument;
+//import javax.swing.text.StyledDocument;
 
 
 public class ControlWindow extends JFrame {
@@ -54,7 +38,7 @@ public class ControlWindow extends JFrame {
 
 	
 	//Boolean for whether or not USB is connected
-	private static boolean connected = false;
+//	private static boolean connected = false;
 	
 	private JButton openCloseButton;
 	private JButton startStopButton;
@@ -122,7 +106,7 @@ public class ControlWindow extends JFrame {
 		//Add the chart to displayFrame
 		//displayFrame.setContentPane(getChart());
 
-		openCloseButton = new JButton("Open");
+		openCloseButton = new JButton("Show");
 		openCloseButton.addActionListener(OpenClose);
 		displayFrame.add(openCloseButton);
 		
@@ -132,7 +116,7 @@ public class ControlWindow extends JFrame {
 		
 		numResponsesText = new JTextPane();
 		SimpleAttributeSet attr = new SimpleAttributeSet();
-		StyledDocument doc = numResponsesText.getStyledDocument();
+//		StyledDocument doc = numResponsesText.getStyledDocument();
 		StyleConstants.setAlignment(attr, StyleConstants.ALIGN_CENTER);
 		numResponsesText.setParagraphAttributes(attr, true);
 		
@@ -160,24 +144,25 @@ public class ControlWindow extends JFrame {
 	};
 	
 	public void OpenClose() {
-		if(!display.isOpen()) {
-			display.openDisplay();
-			setOpenCloseText("Close");
-		}
-		else {
-			display.closeDisplay();
-			setOpenCloseText("Open");
-		}
+		toggleDisplay(!display.isOpen(), false);
 	}
 	
-	public void toggleDisplay(boolean state) {
+	public void toggleDisplay(boolean state, boolean commandFromWeb) {
 		if(state) {
 			display.openDisplay();
-			setOpenCloseText("Close");
+			setOpenCloseText("Unshow");
+			
+			if(web.isSessionStarted() && !commandFromWeb) {
+				web.showPoll();
+			}
 		}
 		else {
 			display.closeDisplay();
-			setOpenCloseText("Open");
+			setOpenCloseText("Show");
+			
+			if(web.isSessionStarted() && !commandFromWeb) {
+				web.hidePoll();
+			}
 		}
 	}
 	
@@ -186,16 +171,19 @@ public class ControlWindow extends JFrame {
 	}
 	
 	private ActionListener StartStop = new ActionListener() {
-		
 		@Override
 		public void actionPerformed(ActionEvent e) {
-			StartStop();
+			if(web.getDisplayFrame().isVisible()) {
+				JOptionPane.showMessageDialog(displayFrame, "Please login or close the login prompt.");
+			}
+			else {
+				StartStop();
+			}
 		}
 	};
 	
 	public void StartStop() {
 		togglePoll(shouldStart, false);
-		shouldStart = !shouldStart;
 	}
 	
 	public void togglePoll(boolean state, boolean commandFromWeb) {
@@ -209,8 +197,13 @@ public class ControlWindow extends JFrame {
 				web.activatePoll();
 			}
 	
+			if(display.isOpen()) {
+				display.closeDisplay();
+			}
+			
 			setStartStopText("Stop");
 			numResponsesText.setText("0");
+			shouldStart = false;
 		}
 		else {
 			usb.stopPoll();
@@ -221,6 +214,7 @@ public class ControlWindow extends JFrame {
 			
 			setStartStopText("Start");
 			numResponsesText.setText("-");
+			shouldStart = true;
 		}
 	}
 	

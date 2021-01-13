@@ -8,7 +8,7 @@ import javax.swing.JTextField;
 
 public class CredentialController{
 	
-	private boolean hasFile;
+//	private boolean hasFile;
 	
 	private String username = "";
 	private String password = "";
@@ -30,6 +30,8 @@ public class CredentialController{
 				
 				username = bufferedReader.readLine();
 				password = bufferedReader.readLine();
+				
+				bufferedReader.close();
 				
 //				username = "instructor@ucsd.edu";
 //				password = "instructor";

@@ -69,7 +69,7 @@ public class Display extends JFrame {
 	private static DefaultCategoryDataset data;
 	
 	//Boolean for whether or not USB is connected
-	private static boolean connected = false;
+//	private static boolean connected = false;
 	
 	private ControlWindow controller;
 	
@@ -112,6 +112,8 @@ public class Display extends JFrame {
 		// Center the display on the screen
 		displayFrame.setLocationRelativeTo(null);
 		
+		
+		
 		//Add the chart to displayFrame
 		displayFrame.setContentPane(getChart());
 		displayFrame.validate();
@@ -129,12 +131,16 @@ public class Display extends JFrame {
 		@Override
         public void windowClosing(WindowEvent e) {
 			closeDisplay();
-			controller.setOpenCloseText("Open");
+			controller.toggleDisplay(false, false);
         }
-
+		
+		@Override
+        public void windowIconified(WindowEvent e) {
+			controller.toggleDisplay(false, false);
+		}
+		
         public void windowOpened(WindowEvent e) {}
         public void windowClosed(WindowEvent e) {}
-        public void windowIconified(WindowEvent e) {}
         public void windowDeiconified(WindowEvent e) {}
         public void windowActivated(WindowEvent e) {}
         public void windowDeactivated(WindowEvent e) {}
@@ -155,7 +161,7 @@ public class Display extends JFrame {
 	 * @param response the student's response (A,B,C,D, or E)
 	 */
 	public boolean newResponse(String studentID, String response, boolean shouldUpdateCount) {
-		boolean output = false;
+//		boolean output = false;
 		boolean newStudent = true;
 		
 		//Get extant responses
