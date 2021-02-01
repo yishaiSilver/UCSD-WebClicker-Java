@@ -12,27 +12,17 @@ public class MainClass {
 		
 		ControlWindow controller = new ControlWindow(display, usb, web);
 		
-//		boolean startedKeyLogger = false;
+		long startMilli = -1;
 		
 		try {
 			while(true) {
-//				System.out.println(web.isCourseSelected());
-//				if(web.isCourseSelected() && !startedKeyLogger) {
-//					String imageUploadSite = "http://54.153.95.213:3001/upload";
-//					String sessionNum = web.getSessionNumber();
-//					String courseName = web.getSelectedCourse();
-//					String instructorID = web.getID();
-//					VoteStatus voteStatus = new VoteStatus();
-//					
-//					System.out.println(sessionNum + courseName + instructorID);
-//					
-//					KeyLogger l = new KeyLogger(display, usb, web, voteStatus, imageUploadSite, "Lecture" + sessionNum, courseName, instructorID);  
-//					Thread t1 = new Thread(l);  
-//					t1.start(); 
-//					startedKeyLogger = true;
-//				}
-	
 				if(controller.isPollActive()) {
+					if(startMilli == -1) {
+						startMilli = System.currentTimeMillis();
+					}
+					
+					long timeElapsed = (System.currentTimeMillis() - startMilli) / 1000;
+					
 					if(web.isSessionStarted()) {
 						int[] votes = web.getVotes(true);
 					
@@ -44,14 +34,18 @@ public class MainClass {
 								total += i;
 							}
 								
+							controller.setElapsedTime((int)timeElapsed);
 							controller.setNumResponsesText("" + total);
 						}
 					}
 					else {
 						int total = display.getNumResponses();
 
+						controller.setElapsedTime((int)timeElapsed);
 						controller.setNumResponsesText("" + total);
 					}
+				}else {
+					startMilli = -1;
 				}
 				
 				Thread.sleep(500);

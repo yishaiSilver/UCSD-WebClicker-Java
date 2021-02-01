@@ -42,8 +42,9 @@ public class ControlWindow extends JFrame {
 	
 	private JButton openCloseButton;
 	private JButton startStopButton;
-	
+
 	private JTextPane numResponsesText;
+	private JTextPane timeElapsedText;
 	
 	private Display display;
 	
@@ -114,17 +115,21 @@ public class ControlWindow extends JFrame {
 		startStopButton.addActionListener(StartStop);
 		displayFrame.add(startStopButton);
 		
-		numResponsesText = new JTextPane();
+		timeElapsedText = new JTextPane();
 		SimpleAttributeSet attr = new SimpleAttributeSet();
+		StyleConstants.setAlignment(attr, StyleConstants.ALIGN_CENTER);
+		timeElapsedText.setParagraphAttributes(attr, true);
+		Font font = new Font(Font.MONOSPACED,
+				Font.PLAIN,
+				timeElapsedText.getFont().getSize());
+		timeElapsedText.setFont(font);
+		timeElapsedText.setText("--:--");
+		displayFrame.add(timeElapsedText);
+		
+		numResponsesText = new JTextPane();
 //		StyledDocument doc = numResponsesText.getStyledDocument();
 		StyleConstants.setAlignment(attr, StyleConstants.ALIGN_CENTER);
 		numResponsesText.setParagraphAttributes(attr, true);
-		
-		
-		
-		Font font = new Font(Font.MONOSPACED,
-				Font.PLAIN,
-				numResponsesText.getFont().getSize());
 		numResponsesText.setFont(font);
 		numResponsesText.setText("-");
 		displayFrame.add(numResponsesText);
@@ -213,6 +218,7 @@ public class ControlWindow extends JFrame {
 			}
 			
 			setStartStopText("Start");
+			timeElapsedText.setText("--:--");
 			numResponsesText.setText("-");
 			shouldStart = true;
 		}
@@ -226,10 +232,25 @@ public class ControlWindow extends JFrame {
 		startStopButton.setText(str);
 	}
 	
+	public void setElapsedTime(int time) {
+		int minutes = time / 60;
+		int seconds = time % 60;
+		
+		String minStr = "" + minutes;
+		while(minStr.length() < 2) {
+			minStr = "0" + minStr;
+		}
+		
+		String secStr = "" + seconds;
+		while(secStr.length() < 2) {
+			secStr = "0" + secStr;
+		}
+		
+		timeElapsedText.setText(minStr + ":" + secStr);
+	}
+	
 	public void setNumResponsesText(String str) {
-		//if(!shouldStart) { // we've already started
-			numResponsesText.setText(str);
-		//S}
+		numResponsesText.setText(str);
 	}
 	
 	/**

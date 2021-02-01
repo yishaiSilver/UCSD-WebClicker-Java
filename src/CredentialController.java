@@ -21,11 +21,11 @@ public class CredentialController{
 		usernameBox = userBox;
 		passwordBox = passBox;
 		
-		File file = new File("assets/creds.txt");
+		File file = new File("creds.txt");
 		
 		if(file.exists() && !file.isDirectory()) {
 			try {
-				FileReader fileReader = new FileReader("assets/creds.txt");
+				FileReader fileReader = new FileReader("creds.txt");
 				BufferedReader bufferedReader = new BufferedReader(fileReader);
 				
 				username = bufferedReader.readLine();
@@ -43,12 +43,8 @@ public class CredentialController{
 				e.printStackTrace();
 			}
 		}
-		else {
-			
-			System.err.println("Creds don't exist!");
+		else {	
 		}
-		
-		System.out.println();
 	}
 	
 	public String getUsername() {
@@ -61,15 +57,15 @@ public class CredentialController{
 	
 	public void saveCreds(String username, String encryptedPassword) {
 		try {
-			File oldCreds = new File("assets/creds.txt");
-			if(oldCreds.exists()) {
-				oldCreds.delete();
-			}
+			File oldCreds = new File("creds.txt");
+			oldCreds.createNewFile();
 			
-			FileWriter file = new FileWriter("assets/creds.txt");
+			FileWriter file = new FileWriter("creds.txt");
 			file.write(username + "\n");
 			file.write(encryptedPassword);
 			file.close();
+			
+			System.out.println("saving creds");
 		} catch (Exception e) {
 			e.printStackTrace();
 		}

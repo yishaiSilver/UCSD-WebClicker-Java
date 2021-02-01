@@ -79,7 +79,7 @@ public class WebsocketClientEndpoint {
      * @param message
      */
     public void sendMessage(String message) {
-    	System.out.println("Sending: " + message);
+//    	System.out.println("Sending: " + message);
         this.userSession.getAsyncRemote().sendText(message);
     }
 

@@ -1,32 +1,26 @@
 import java.awt.AWTException;
-import java.awt.DisplayMode;
-import java.awt.GraphicsDevice;
-import java.awt.GraphicsEnvironment;
+//import java.awt.DisplayMode;
+//import java.awt.GraphicsDevice;
+//import java.awt.GraphicsEnvironment;
 import java.awt.HeadlessException;
+import java.awt.Image;
 import java.awt.Rectangle;
 import java.awt.Robot;
 //import java.awt.Shape;
 import java.awt.Toolkit;
 import java.awt.image.BufferedImage;
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.util.Base64;
 
 import javax.imageio.ImageIO;
 //import javax.swing.JButton;
 import javax.swing.JFrame;
 //import javax.swing.JTextPane;
 
-import org.apache.http.HttpEntity;
-import org.apache.http.client.methods.CloseableHttpResponse;
-import org.apache.http.client.methods.HttpUriRequest;
-import org.apache.http.client.methods.RequestBuilder;
-import org.apache.http.entity.mime.HttpMultipartMode;
-import org.apache.http.entity.mime.MultipartEntityBuilder;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClients;
-import org.apache.http.util.EntityUtils;
 import org.jnativehook.GlobalScreen;
 import org.jnativehook.NativeHookException;
 import org.jnativehook.keyboard.NativeKeyEvent;
@@ -46,12 +40,8 @@ public class KeyLoggerHelper extends JFrame implements NativeKeyListener {
 	 */
 	private static final long serialVersionUID = 1L;
 
-	private boolean shouldStart = true;
-	public Display display;
-	public USBController usb;
+//	private boolean shouldStart = true;
 	public WebController web;
-	public VoteStatus voteStatus;
-	public String imageUploadSite, lecture, courseName, instructorID;
 
 	private static final int MAX_TITLE_LENGTH = 1024;
 	private boolean ctrl = false, shift = false; 
@@ -59,84 +49,75 @@ public class KeyLoggerHelper extends JFrame implements NativeKeyListener {
 	public int screen_shot_number;
 	public int current_number;
 
-	public KeyLoggerHelper(Display display, USBController usb, WebController web, VoteStatus voteStatus,
-			String imageUploadSite, String lecture, int slideNum, String courseName, String instructorID) {
-		this.display = display;
-		this.usb = usb;
+	public KeyLoggerHelper(WebController web) {
+		System.out.println("STARTING KEYLOGGER");
 		this.web = web;
-		this.voteStatus = voteStatus;
-		this.imageUploadSite = imageUploadSite;
-		this.lecture = lecture;
-		this.courseName = courseName;
-		this.instructorID = instructorID;
-		this.screen_shot_number = slideNum;
-		this.current_number = slideNum;
+		this.screen_shot_number = 0;
+		this.current_number = 0;
 
 	}
-
-	public void start_stop_poll() {
-		if (shouldStart) {
-			usb.startPoll();
-			web.createPoll();
-			web.activatePoll();
-			voteStatus.view(true);
-		} else {
-			usb.stopPoll();
-			web.deactivatePoll();
-			voteStatus.view(false);
-		}
-
-		shouldStart = !shouldStart;
-	}
-
-	public void view_poll() {
-		if (!display.isOpen()) {
-			display.openDisplay();
-		} else
-			display.closeDisplay();
-	}
+	
+//	public void take_pic() {
+//		// System.out.println("Take Screenshot");
+//		try {
+//			int width = 0;
+//			int height = 0;
+//			int xCor = 0;
+//			int yCor = 0;
+//
+//			GraphicsEnvironment ge = GraphicsEnvironment.getLocalGraphicsEnvironment();
+//			GraphicsDevice[] gs = ge.getScreenDevices();
+//
+//			DisplayMode mode = gs[gs.length - 1].getDisplayMode();
+//			width += mode.getWidth();
+//			height += mode.getHeight();
+//			double scale = 96.0 / Toolkit.getDefaultToolkit().getScreenResolution();
+//			xCor = (int) ((gs[gs.length - 1].getDefaultConfiguration().getBounds().getX()) * scale);
+//			yCor = (int) ((gs[gs.length - 1].getDefaultConfiguration().getBounds().getY()) * scale);
+//
+//			BufferedImage image = new Robot().createScreenCapture(new Rectangle(xCor, yCor, width, height));
+////			ImageIO.write(image, "jpg",
+////					new File("screenshots/screenshot" + Integer.toString(screen_shot_number) + ".jpg"));
+//
+//			ByteArrayOutputStream baos = new ByteArrayOutputStream();
+//			ImageIO.write(image, "jpg", baos);
+//			
+//			String b64Image = Base64.getEncoder().encodeToString(baos.toByteArray());
+//
+//			System.out.println("Uploaded Screenshot"); 
+//			web.uploadScreenshot(b64Image);
+//			
+//
+//			screen_shot_number++;
+//			current_number++;
+//
+//		} catch (IOException e) {
+//			// TODO Auto-generated catch block
+//			e.printStackTrace();
+//		} catch (HeadlessException | AWTException e) {
+//
+//		}
+//	}
 
 	public void take_pic() {
 		// System.out.println("Take Screenshot");
 		try {
-			int width = 0;
-			int height = 0;
-			int xCor = 0;
-			int yCor = 0;
+			Rectangle fullscreen = new Rectangle(Toolkit.getDefaultToolkit().getScreenSize());
+			BufferedImage screenshot = new Robot().createScreenCapture(fullscreen);
+			Image resized = screenshot.getScaledInstance(720, 480, Image.SCALE_DEFAULT);
+			screenshot = Screenshot.toBufferedImage(resized);
+			ByteArrayOutputStream baos = new ByteArrayOutputStream();
+			ImageIO.write(screenshot, "jpg", baos);
 
-			GraphicsEnvironment ge = GraphicsEnvironment.getLocalGraphicsEnvironment();
-			GraphicsDevice[] gs = ge.getScreenDevices();
+			File file = new File("screenshot.png");
+//			file.createNewFile();
+			
+			ImageIO.write(screenshot, "png", file);
 
-			DisplayMode mode = gs[gs.length - 1].getDisplayMode();
-			width += mode.getWidth();
-			height += mode.getHeight();
-			double scale = 96.0 / Toolkit.getDefaultToolkit().getScreenResolution();
-			xCor = (int) ((gs[gs.length - 1].getDefaultConfiguration().getBounds().getX()) * scale);
-			yCor = (int) ((gs[gs.length - 1].getDefaultConfiguration().getBounds().getY()) * scale);
-
-			BufferedImage image = new Robot().createScreenCapture(new Rectangle(xCor, yCor, width, height));
-			ImageIO.write(image, "jpg",
-					new File("screenshots/screenshot" + Integer.toString(screen_shot_number) + ".jpg"));
-
-			// System.out.println(scale);
-
-			screen_shot_number++;
-			current_number++;
-			CloseableHttpClient httpclient = HttpClients.createDefault();
-			MultipartEntityBuilder entitybuilder = MultipartEntityBuilder.create();
-			entitybuilder.setMode(HttpMultipartMode.BROWSER_COMPATIBLE);
-			entitybuilder.addTextBody("courseName", courseName);
-			entitybuilder.addTextBody("sessionID", lecture);
-			entitybuilder.addTextBody("instructorID", instructorID);
-			entitybuilder.addBinaryBody("file",
-					new File("screenshots/screenshot" + Integer.toString(screen_shot_number - 1) + ".jpg"));
-			HttpEntity mutiPartHttpEntity = entitybuilder.build();
-			RequestBuilder reqbuilder = RequestBuilder.post(imageUploadSite);
-			reqbuilder.setEntity(mutiPartHttpEntity);
-			HttpUriRequest multipartRequest = reqbuilder.build();
-			CloseableHttpResponse httpresponse = httpclient.execute(multipartRequest);
-			System.out.println(EntityUtils.toString(httpresponse.getEntity()));
-			System.out.println(httpresponse.getStatusLine());
+			String b64Image = Base64.getEncoder().encodeToString(baos.toByteArray());
+			
+			System.out.println("Uploaded Screenshot: " + baos.toByteArray().length); 
+			web.uploadScreenshot(b64Image);
 
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
@@ -146,18 +127,13 @@ public class KeyLoggerHelper extends JFrame implements NativeKeyListener {
 		}
 	}
 
+	
 	public void nativeKeyPressed(NativeKeyEvent e) {
 
 		if (e.getKeyCode() == NativeKeyEvent.VC_CONTROL)
 			ctrl = true;
 		else if (e.getKeyCode() == NativeKeyEvent.VC_SHIFT)
 			shift = true;
-		if (ctrl && shift) {
-			if (e.getKeyCode() == NativeKeyEvent.VC_J)
-				start_stop_poll();
-			else if (e.getKeyCode() == NativeKeyEvent.VC_K)
-				view_poll();
-		}
 		if (!isWindowInFullScreen() && !getWindowInFocus().toLowerCase().contains("powerpoint")) {
 			if (ctrl && shift) {
 				if (e.getKeyCode() == NativeKeyEvent.VC_L)
@@ -166,15 +142,16 @@ public class KeyLoggerHelper extends JFrame implements NativeKeyListener {
 					try {
 						GlobalScreen.unregisterNativeHook();
 					} catch (NativeHookException e1) {
-						e1.printStackTrace();
+					 	e1.printStackTrace();
 					}
 				}
 			}
 		} else if (isWindowInFullScreen() && getWindowInFocus().toLowerCase().contains("powerpoint")) {
+//  		} else if (isWindowInFullScreen() && getWindowInFocus().toLowerCase().contains("powerpoint")) {              
 			if (e.getKeyCode() == NativeKeyEvent.VC_SPACE) {
 				if (screen_shot_number == current_number)
 					take_pic();
-				else
+				else 
 					current_number++;
 			} else if (e.getKeyCode() == NativeKeyEvent.VC_N) {
 				if (screen_shot_number == current_number)
@@ -231,8 +208,7 @@ public class KeyLoggerHelper extends JFrame implements NativeKeyListener {
 		} catch (NativeHookException ex) {
 			System.exit(1);
 		}
-		GlobalScreen.addNativeKeyListener(new KeyLoggerHelper(this.display, this.usb, this.web, this.voteStatus,
-				this.imageUploadSite, this.lecture, this.screen_shot_number, this.courseName, this.instructorID));
+		GlobalScreen.addNativeKeyListener(new KeyLoggerHelper(this.web));
 	}
 
 	public void stopHotKeys() {

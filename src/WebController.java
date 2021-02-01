@@ -7,6 +7,7 @@ import org.bouncycastle.crypto.engines.RSAEngine;
 import org.bouncycastle.crypto.params.AsymmetricKeyParameter;
 import org.bouncycastle.openssl.PEMParser;
 import org.bouncycastle.crypto.util.PublicKeyFactory;
+
 //import java.awt.BorderLayout;
 import java.awt.CardLayout;
 import java.awt.Dimension;
@@ -197,21 +198,6 @@ public class WebController {
 		layout.putConstraint(SpringLayout.NORTH, courseSelector, 50, SpringLayout.NORTH, courseSelectionPanel);
 		courseSelector.addActionListener(selectedCourse);
 		courseSelectionPanel.add(courseSelector);
-		
-//		// add the lecture number input field
-//		JLabel lectureLabel = new JLabel("Lecture Number: ");
-//		lectureNumber = new JTextField("0", 9);
-//		lectureNumber.addFocusListener(new FocusListener() {
-//			@Override 
-//			public void focusLost(final FocusEvent pE) {}
-//            
-//			@Override 
-//			public void focusGained(final FocusEvent pE) {
-//                lectureNumber.selectAll();
-//            }
-//		});
-//		courseSelectionPanel.add(lectureLabel);
-//		courseSelectionPanel.add(lectureNumber);
 
 		// add new session button
 		resumeSessionButton = new JButton("Resume Session");
@@ -387,6 +373,7 @@ public class WebController {
 					activateSession();
 					displayFrame.setVisible(false);
 					sessionCreated = true;
+					startKeyLogger();
 				}
 			}
 		}
@@ -398,8 +385,32 @@ public class WebController {
 			resumeSession();
 			courseSelected = true;
 			displayFrame.setVisible(false);
+			startKeyLogger();
 		}
 	};
+	     
+	private void startKeyLogger() {
+		KeyLogger l = new KeyLogger(this);  
+		Thread t1 = new Thread(l);  
+		t1.start(); 
+//		take_pic();
+	}
+	
+	public void uploadScreenshot(String b64Image) {
+		try {
+			allVotes = new int[] {0, 0, 0, 0, 0};
+			
+			// Create json packet
+			String toSend = "{\"type\" : \"upload\", \"sessionID\" : \"" + sessionID + "\", \"image\" : \"" 
+					+ b64Image + 
+					"\"}";
+
+			socket.sendMessage(toSend);
+			
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
 	
 	public void createPoll() {
 		try {

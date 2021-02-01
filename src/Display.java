@@ -136,7 +136,9 @@ public class Display extends JFrame {
 		
 		@Override
         public void windowIconified(WindowEvent e) {
-			controller.toggleDisplay(false, false);
+			if(controller != null) {
+				controller.toggleDisplay(false, false);
+			}
 		}
 		
         public void windowOpened(WindowEvent e) {}
