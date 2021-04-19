@@ -7,9 +7,27 @@
  * @version 1.0
  * @since 2019-08-19
  */
+import java.awt.CardLayout;
+import java.awt.Dimension;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.awt.event.FocusEvent;
+import java.awt.event.FocusListener;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+
+import javax.swing.JButton;
+import javax.swing.JComboBox;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JPasswordField;
+import javax.swing.JTextField;
+import javax.swing.SpringLayout;
 
 import purejavahidapi.*;
 
@@ -102,6 +120,15 @@ public class USBController {
 	
 	ArrayList<Response> responses;
 	
+	private ControlWindow controlWindow;
+	
+	private JFrame displayFrame;
+	private JPanel loginPanel;
+	private JPanel freqSelectionPanel;
+	private JComboBox<String> freqSelector1;
+	private JButton confirmButton;
+	private JComboBox<String> freqSelector2;
+	
 	/**
 	 * Runs a loop to connect to Pi and then control display 
 	 * 
@@ -138,6 +165,7 @@ public class USBController {
 						
 						//If the device is open, configure it
 						if(devicePresent && !deviceConfigured) {
+							begin();
 							dev = PureJavaHidApi.openDevice(devInfo);
 							
 							//Give it an InputReportListener
@@ -213,12 +241,12 @@ public class USBController {
 												break;
 										}
 										
-										System.err.println("Student ID: " + idStr);
+//										System.err.println("Student ID: " + idStr);
 										
 										//Register the response
 										boolean connected = web.isCourseSelected();
 										boolean shouldUpdateDB = display.newResponse(idStr, responseLetter, !connected);
-										System.out.println(web.isSessionStarted());										
+//										System.out.println(web.isSessionStarted());										
 										if(shouldUpdateDB && web.isSessionStarted()) {
 											web.newResponse(idStr, responseLetter);
 										}
@@ -233,6 +261,7 @@ public class USBController {
 									devicePresent = false;
 									deviceConfigured = false;
 									dev = null;
+									controlWindow.updateUSBStatus(false);
 									//Display.setConnected(false);
 								}
 							});
@@ -257,6 +286,10 @@ public class USBController {
 		}});
 		
 		t.start();
+	}
+	
+	public void setControlWindow(ControlWindow controlWindow) {
+		this.controlWindow = controlWindow;
 	}
 	
 	public void resetVotes() {
@@ -351,6 +384,10 @@ public class USBController {
 		}
 	}
 	
+	public boolean isConnected() {
+		return canStartPoll;
+	}
+	
 	public void startup() {
 		/*
 		 * 01120000
@@ -385,6 +422,11 @@ public class USBController {
 				sendReport(PACKET_01136943);
 				sendReport(PACKET_01142020);
 				System.err.println("Completed startup!");
+				
+				if(controlWindow != null) {
+					controlWindow.updateUSBStatus(true);
+				}
+				
 			} catch (Exception e) {
 				e.printStackTrace();
 			}
@@ -533,5 +575,90 @@ public class USBController {
 		}
 	}
 	
+	public void selectFrequency() {
+		displayFrame.setVisible(true);
+	}
+	
+	private void begin() {
+		//Initialize displayFrame
+		displayFrame = new JFrame();
+		displayFrame.setTitle("Select Frequency");
+		displayFrame.setAlwaysOnTop(true);
+
+		
+		SpringLayout layout = new SpringLayout();
+		displayFrame.setLayout(layout);
+		
+		//add the course selection panel
+		freqSelectionPanel = new JPanel();
+	
+		displayFrame.add(freqSelectionPanel);
+		
+		freqSelector1 = new JComboBox<String>();
+		freqSelector1.setPreferredSize(new Dimension(35, 30));
+		freqSelector1.addItem("A");
+		freqSelector1.addItem("B");
+		freqSelector1.addItem("C");
+		freqSelector1.addItem("D");
+		layout.putConstraint(SpringLayout.NORTH, freqSelector1, 50, SpringLayout.NORTH, freqSelectionPanel);
+		freqSelector1.addActionListener(selectedCourse);
+
+		freqSelectionPanel.add(freqSelector1);
+		
+		freqSelector2 = new JComboBox<String>();
+		freqSelector2.setPreferredSize(new Dimension(35, 30));
+		freqSelector2.addItem("A");
+		freqSelector2.addItem("B");
+		freqSelector2.addItem("C");
+		freqSelector2.addItem("D");
+		layout.putConstraint(SpringLayout.NORTH, freqSelector2, 90, SpringLayout.NORTH, freqSelectionPanel);
+		freqSelector2.addActionListener(selectedCourse);
+		
+		freqSelectionPanel.add(freqSelector2);
+
+		// add new session button
+		confirmButton = new JButton("Confirm Frequency");
+		confirmButton.addActionListener(newSession);
+		freqSelectionPanel.add(confirmButton);
+		
+		
+		freqSelectionPanel.validate();
+		 
+//		// set JFrame height, width -- HEIGHT ALGORITHM IS VERY WONKY, SHOULD FIX
+//		int width = usernameBox.getX() + usernameBox.getWidth() + 25;
+//		int height = loginButton.getY() + loginButton.getHeight() * 3 + 10;
+		
+		int width = 250;
+		int height = 90;
+		
+
+		displayFrame.setSize(width, height);
+		
+		
+		// Center the display on the screen
+		displayFrame.setLocationRelativeTo(null);
+		
+		//displayFrame.pack();
+		displayFrame.validate();
+		displayFrame.setVisible(false);
+	}
+	
+	public boolean isSelectorOpen() {
+		return displayFrame.isVisible();
+	}
+	
+	private ActionListener selectedCourse = new ActionListener() {
+		@Override
+		public void actionPerformed(ActionEvent e) {
+//			updateCourseSelector();
+		}
+	};
+	
+	private ActionListener newSession = new ActionListener() {
+		@Override
+		public void actionPerformed(ActionEvent e) {
+			displayFrame.setVisible(false);
+		}
+	};
 	
 }

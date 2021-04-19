@@ -17,6 +17,8 @@ import java.awt.event.FocusEvent;
 import java.awt.event.FocusListener;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
+import java.io.File;
+import java.io.FileWriter;
 import java.io.StringReader;
 import java.net.URI;
 import org.json.simple.JSONObject;
@@ -36,6 +38,7 @@ import javax.swing.JPanel;
 import javax.swing.JPasswordField;
 import javax.swing.JTextField;
 import javax.swing.SpringLayout;
+import javax.websocket.CloseReason;
 
 
 public class WebController {
@@ -70,6 +73,7 @@ public class WebController {
 	private String pollID = "";
 	
 	private String instructorID = "";
+	private boolean loggedInSuccessfully = false;
 
 	private boolean courseSelected = false;
 	private Course currentCourse;
@@ -97,10 +101,13 @@ public class WebController {
 	
 //	private boolean firstMessage = true;
 	
-//	private boolean loggedIn = false;
 	private String sentUsername;
 	private String sentEncryptedPassword;
 	
+	boolean recievedResponseFromPoke = false;
+	boolean hasDisconnected = false;
+	
+	KeyLogger keyLogger;
 	
 	public WebController(Display display) {
 		courses = new ArrayList<Course>();
@@ -269,6 +276,7 @@ public class WebController {
 			return true;
 		} catch (Exception e) {
 			JOptionPane.showMessageDialog(displayFrame, "A connection has not been established yet.\nPlease try again.");
+			SetupNotificationSocket();
 			e.printStackTrace();
 		}
 		return false;
@@ -360,9 +368,19 @@ public class WebController {
 					System.out.println(sessionID);
 					createSession();
 					
+					int numCycles = 500;
 					while(sessionID.contentEquals("")) {
 						try {
 							System.out.println("Waiting for server to return sessionID");
+							
+							numCycles --;
+							if(numCycles <= 0) {
+//								JOptionPane.showMessageDialog(displayFrame, "Timed out! Continuing without web functionality.");
+								displayFrame.setVisible(false);
+								controlWindow.updateWebStatus(false);
+								return;
+							}
+							
 							Thread.sleep(10);
 						} catch (InterruptedException e1) {
 							e1.printStackTrace();
@@ -374,6 +392,7 @@ public class WebController {
 					displayFrame.setVisible(false);
 					sessionCreated = true;
 					startKeyLogger();
+					controlWindow.updateWebStatus(true);
 				}
 			}
 		}
@@ -386,12 +405,13 @@ public class WebController {
 			courseSelected = true;
 			displayFrame.setVisible(false);
 			startKeyLogger();
+			controlWindow.updateWebStatus(true);
 		}
 	};
 	     
 	private void startKeyLogger() {
-		KeyLogger l = new KeyLogger(this);  
-		Thread t1 = new Thread(l);  
+		keyLogger = new KeyLogger(this);  
+		Thread t1 = new Thread(keyLogger);  
 		t1.start(); 
 //		take_pic();
 	}
@@ -429,14 +449,25 @@ public class WebController {
 	
 	public void activatePoll() {
 		try {
+			int numCycles = 50; // wait for 5 seconds before timing out 
 			while(pollID.contentEquals("")) {
 				Thread.sleep(100);
+				numCycles --;
+				
+				if(numCycles <= 0) {
+//					JOptionPane.showMessageDialog(displayFrame, "Timed out! Continuing without web functionality.");
+					controlWindow.updateWebStatus(false);
+					sessionID = "";
+					return;
+				}
 			}
 			
 			// Create json packet
 			String toSend = "{\"type\" : \"activatePoll\", \"pollID\" : \"" + pollID + "\"}";
 
 			socket.sendMessage(toSend);
+			
+			keyLogger.take_pic();
 			
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -689,13 +720,38 @@ public class WebController {
 		Thread t = new Thread(new Runnable() { public void run() {
 	        try {
 	        	// open websocket
-	    		try {
-	    			socket = new WebsocketClientEndpoint(new URI(SOCKET_SERVER_HOSTNAME));
-	    		} catch (Exception e) {
-					JOptionPane.showMessageDialog(displayFrame, "Connection failed.");
-	    			e.printStackTrace();
+	    		while(true) {
+		        	try {
+		    			socket = new WebsocketClientEndpoint(new URI(SOCKET_SERVER_HOSTNAME));
+		    			Thread.sleep(330);
+		    			break;
+		    		} catch (Exception e) {
+		    			System.err.println("Failed to connect!");
+//						JOptionPane.showMessageDialog(displayFrame, "Connection failed.");
+//		    			e.printStackTrace();
+		    		}
 	    		}
-
+	    		
+	    		socket.addCloseHandler(new WebsocketClientEndpoint.CloseHandler() {
+					
+					@Override
+					public void handleClose(CloseReason reason) {
+						// TODO Auto-generated method stub
+						try {
+//							System.out.println(reason.toString());
+							File oldCreds = new File("reasonForDisconnect.txt");
+							oldCreds.createNewFile();
+							
+							FileWriter file = new FileWriter("reasonForDisconnect.txt");
+							file.write(reason.toString());
+							file.close();
+						} catch(Exception e) {
+							e.printStackTrace();
+						}
+//						JOptionPane.showMessageDialog(displayFrame, "Connection Lost: " + reason);
+					}
+				});
+	    		
 	            // add listener
 	            socket.addMessageHandler(new WebsocketClientEndpoint.MessageHandler() {
 	                public void handleMessage(String message) {
@@ -746,6 +802,12 @@ public class WebController {
 			        			}
 		        			}
 		        			else if(updateType.contentEquals("response")) {
+		        				if(obj.containsKey("error")) {
+		        					System.out.println("Error returned from server!");
+		        					recievedResponseFromPoke = true;
+		        					return;
+		        				}
+		        				
 		        				String responseFrom = (String) obj.get("responseFrom");
 		        				JSONObject data = (JSONObject) obj.get("data");
 		        				
@@ -805,8 +867,16 @@ public class WebController {
 	        			} catch(Exception e) {
 	        				e.printStackTrace();
 	        			}
-		            }});
+		            }}); // End of the message handler
 			
+	            	System.out.println("Logged in: " + loggedInSuccessfully);
+	            	if(loggedInSuccessfully) {
+	            		login(instructorID, sentEncryptedPassword.toCharArray());
+	            		controlWindow.updateWebStatus(true);
+	            	}
+	            
+	            	startPokeThread();
+	            
 		        } catch (Exception e) {
 		        	e.printStackTrace();
 		        }
@@ -817,8 +887,14 @@ public class WebController {
 	
 	private void login(boolean loggedIn, JSONObject loginResponse) {// https://www.tutorialspoint.com/json/json_java_example.htm
 		
+		if(loggedInSuccessfully) {
+			return;
+		}
+		
 		// successfully logged in
 		if(loggedIn) {
+			this.loggedInSuccessfully = true;
+			
 			// ask if you'd like to save the creds if their different
 			String savedUsername = credController.getUsername();
 			String savedPassword = credController.getPassword();
@@ -834,8 +910,9 @@ public class WebController {
 						options[0]);
 				
 				if(choice == JOptionPane.YES_OPTION) {
-					credController.saveCreds(sentUsername, sentEncryptedPassword);;
+					credController.saveCreds(sentUsername, sentEncryptedPassword);
 				}
+				
 			}
 			
 			// fill in courses
@@ -880,5 +957,36 @@ public class WebController {
 				    "Login Error",
 				    JOptionPane.ERROR_MESSAGE);
 		}
+	}
+	
+	public void startPokeThread() {
+		Thread t = new Thread(new Runnable() {
+
+			@Override
+			public void run() {
+				while(true) {
+					try {
+						socket.sendMessage("boop");
+						Thread.sleep(1000*5);
+					
+						if(recievedResponseFromPoke) {
+							recievedResponseFromPoke = false;
+						}
+						else {
+							controlWindow.updateWebStatus(false);
+							SetupNotificationSocket();
+							break;
+						}
+					
+						Thread.sleep(1000*10);
+					} catch (InterruptedException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
+				}
+			}
+			
+		});
+		t.start();
 	}
 }

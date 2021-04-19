@@ -1,3 +1,4 @@
+import java.io.IOException;
 import java.net.URI;
 import javax.websocket.ClientEndpoint;
 import javax.websocket.CloseReason;
@@ -18,6 +19,7 @@ public class WebsocketClientEndpoint {
 
     Session userSession = null;
     private MessageHandler messageHandler;
+    private CloseHandler closeHandler;
 
     public WebsocketClientEndpoint(URI endpointURI) {
         try {
@@ -50,6 +52,14 @@ public class WebsocketClientEndpoint {
         System.out.println("closing websocket");
         System.out.println(reason);
         this.userSession = null;
+
+    	if(this.closeHandler != null) {
+    		this.closeHandler.handleClose(reason);
+    	}
+    }
+    
+    public void addCloseHandler(CloseHandler handler) {
+    	this.closeHandler = handler;
     }
 
     /**
@@ -79,7 +89,6 @@ public class WebsocketClientEndpoint {
      * @param message
      */
     public void sendMessage(String message) {
-//    	System.out.println("Sending: " + message);
         this.userSession.getAsyncRemote().sendText(message);
     }
 
@@ -91,5 +100,9 @@ public class WebsocketClientEndpoint {
     public static interface MessageHandler {
 
         public void handleMessage(String message);
+    }
+    
+    public static interface CloseHandler {
+    	public void handleClose(CloseReason reason);
     }
 }
