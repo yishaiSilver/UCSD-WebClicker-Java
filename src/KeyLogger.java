@@ -21,7 +21,7 @@ public class KeyLogger implements Runnable {
 	public void run() {
 		File file = new File("screenshots/");
 		file.mkdir();
-		h.startHotKeys();
+//		h.startHotKeys();
 	}
 
 }

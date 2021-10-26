@@ -40,6 +40,9 @@ import javax.swing.JTextField;
 import javax.swing.SpringLayout;
 import javax.websocket.CloseReason;
 
+/*
+ * 
+ */
 
 public class WebController {
 
@@ -92,7 +95,7 @@ public class WebController {
 	CredentialController credController;
 	EncryptionController encrypt;
 	
-	public static final String SOCKET_SERVER_HOSTNAME = "ws://54.153.95.213:3001";
+	public static final String SOCKET_SERVER_HOSTNAME = "ws://54.67.104.190:3001";
 	public static final int SOCKET_SERVER_PORT = 3001;
 	public static final int SOCKET_TIMEOUT = 0;
 
@@ -119,6 +122,8 @@ public class WebController {
 			begin();
 		}});
 		t.start();
+		
+		startKeyLogger();
 	}
 	
 	private void begin() {
@@ -391,7 +396,6 @@ public class WebController {
 					activateSession();
 					displayFrame.setVisible(false);
 					sessionCreated = true;
-					startKeyLogger();
 					controlWindow.updateWebStatus(true);
 				}
 			}
@@ -404,7 +408,6 @@ public class WebController {
 			resumeSession();
 			courseSelected = true;
 			displayFrame.setVisible(false);
-			startKeyLogger();
 			controlWindow.updateWebStatus(true);
 		}
 	};
@@ -418,14 +421,17 @@ public class WebController {
 	
 	public void uploadScreenshot(String b64Image) {
 		try {
+			System.out.println("Uploading screenshot.");
+			
 			allVotes = new int[] {0, 0, 0, 0, 0};
 			
 			// Create json packet
-			String toSend = "{\"type\" : \"upload\", \"sessionID\" : \"" + sessionID + "\", \"image\" : \"" 
+			String toSend = "{\"type\" : \"upload\", \"sessionID\" : \"" + sessionID + "\", \"pollID\" : \"" + pollID + "\", \"image\" : \"" 
 					+ b64Image + 
 					"\"}";
 
 			socket.sendMessage(toSend);
+			System.out.println("Sent pic");
 			
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -466,8 +472,6 @@ public class WebController {
 			String toSend = "{\"type\" : \"activatePoll\", \"pollID\" : \"" + pollID + "\"}";
 
 			socket.sendMessage(toSend);
-			
-			keyLogger.take_pic();
 			
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -709,6 +713,10 @@ public class WebController {
 		return false;
 	}
 	
+	public void takeScreenshot() {
+		keyLogger.take_pic();
+	}
+	
 	/**
 	 * Sets up a socket connection with the server and then waits for commands issued
 	 * from the website and acts upon them accordingly.
@@ -779,6 +787,17 @@ public class WebController {
 				        				if(pollStatus) {
 				        					pollID = (String) data.get("pollID");
 				        				}
+			        				}
+			        			}
+			        			else if(updateFrom.contentEquals("iClickerFreq")) {
+			        				boolean coursesMatch = updateCourseID.contentEquals(currentCourse.getID());
+			        				
+			        				if (coursesMatch) {
+				        				String freq = (String) data.get("iClickerFreq");
+				        				String freq1 = "" + freq.charAt(0);
+				        				String freq2 = "" + freq.charAt(1);
+				        			
+				        				controlWindow.setFrequency(freq1, freq2, true);
 			        				}
 			        			}
 			        			else if(updateFrom.contentEquals("pollDisplayStatus")) {
@@ -935,8 +954,19 @@ public class WebController {
 				String courseName = (String) course.get("courseName");
 				String courseID = (String) course.get("courseID");
 				String activeSessionID = (String) course.get("sessionID");
+				boolean usbEnabled = (boolean) course.get("iClickerEn");
+				
+				String freq = "AA";
+				if(usbEnabled) {
+					try {
+						freq = (String) course.get("iClickerFreq");
+						System.out.println(freq);
+					} catch(Exception e) {
+						e.printStackTrace();
+					}
+				}
 			
-				Course toAdd = new Course(courseName, courseID, activeSessionID);
+				Course toAdd = new Course(courseName, courseID, activeSessionID, freq);
 				courses.add(toAdd);
 				
 				courseSelector.addItem(courseName);

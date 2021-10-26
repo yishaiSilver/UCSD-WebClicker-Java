@@ -91,7 +91,8 @@ public class KeyLoggerHelper extends JFrame implements NativeKeyListener {
 			ImageIO.write(image, "jpg", baos);
 			
 			String b64Image = Base64.getEncoder().encodeToString(baos.toByteArray());
-
+			System.out.println("taking screeshot");
+			
 			web.uploadScreenshot(b64Image);
 			
 
@@ -136,66 +137,66 @@ public class KeyLoggerHelper extends JFrame implements NativeKeyListener {
 
 	
 	public void nativeKeyPressed(NativeKeyEvent e) {
-
-		if (e.getKeyCode() == NativeKeyEvent.VC_CONTROL)
-			ctrl = true;
-		else if (e.getKeyCode() == NativeKeyEvent.VC_SHIFT)
-			shift = true;
-		if (!isWindowInFullScreen() && !getWindowInFocus().toLowerCase().contains("powerpoint")) {
-			if (ctrl && shift) {
-				if (e.getKeyCode() == NativeKeyEvent.VC_L)
-					take_pic();
-				else if (e.getKeyCode() == NativeKeyEvent.VC_ESCAPE) {
-					try {
-						GlobalScreen.unregisterNativeHook();
-					} catch (NativeHookException e1) {
-					 	e1.printStackTrace();
-					}
-				}
-			}
-		} else if (isWindowInFullScreen() && getWindowInFocus().toLowerCase().contains("powerpoint")) {
-//  		} else if (isWindowInFullScreen() && getWindowInFocus().toLowerCase().contains("powerpoint")) {              
-			if (e.getKeyCode() == NativeKeyEvent.VC_SPACE) {
-				if (screen_shot_number == current_number)
-					take_pic();
-				else 
-					current_number++;
-			} else if (e.getKeyCode() == NativeKeyEvent.VC_N) {
-				if (screen_shot_number == current_number)
-					take_pic();
-				else
-					current_number++;
-			} else if (e.getKeyCode() == NativeKeyEvent.VC_ENTER) {
-				if (screen_shot_number == current_number)
-					take_pic();
-				else
-					current_number++;
-			} else if (e.getKeyCode() == NativeKeyEvent.VC_PAGE_DOWN) {
-				if (screen_shot_number == current_number)
-					take_pic();
-				else
-					current_number++;
-			} else if (e.getKeyCode() == NativeKeyEvent.VC_RIGHT) {
-				if (screen_shot_number == current_number)
-					take_pic();
-				else
-					current_number++;
-			} else if (e.getKeyCode() == NativeKeyEvent.VC_DOWN) {
-				if (screen_shot_number == current_number)
-					take_pic();
-				else
-					current_number++;
-			} else if (e.getKeyCode() == NativeKeyEvent.VC_P)
-				current_number--;
-			else if (e.getKeyCode() == NativeKeyEvent.VC_PAGE_UP)
-				current_number--;
-			else if (e.getKeyCode() == NativeKeyEvent.VC_LEFT)
-				current_number--;
-			else if (e.getKeyCode() == NativeKeyEvent.VC_UP)
-				current_number--;
-			else if (e.getKeyCode() == NativeKeyEvent.VC_BACKSPACE)
-				current_number--;
-		}
+//
+//		if (e.getKeyCode() == NativeKeyEvent.VC_CONTROL)
+//			ctrl = true;
+//		else if (e.getKeyCode() == NativeKeyEvent.VC_SHIFT)
+//			shift = true;
+//		if (!isWindowInFullScreen() && !getWindowInFocus().toLowerCase().contains("powerpoint")) {
+//			if (ctrl && shift) {
+//				if (e.getKeyCode() == NativeKeyEvent.VC_L)
+//					take_pic();
+//				else if (e.getKeyCode() == NativeKeyEvent.VC_ESCAPE) {
+//					try {
+//						GlobalScreen.unregisterNativeHook();
+//					} catch (NativeHookException e1) {
+//					 	e1.printStackTrace();
+//					}
+//				}
+//			}
+//		} else if (isWindowInFullScreen() && getWindowInFocus().toLowerCase().contains("powerpoint")) {
+////  		} else if (isWindowInFullScreen() && getWindowInFocus().toLowerCase().contains("powerpoint")) {              
+//			if (e.getKeyCode() == NativeKeyEvent.VC_SPACE) {
+//				if (screen_shot_number == current_number)
+//					take_pic();
+//				else 
+//					current_number++;
+//			} else if (e.getKeyCode() == NativeKeyEvent.VC_N) {
+//				if (screen_shot_number == current_number)
+//					take_pic();
+//				else
+//					current_number++;
+//			} else if (e.getKeyCode() == NativeKeyEvent.VC_ENTER) {
+//				if (screen_shot_number == current_number)
+//					take_pic();
+//				else
+//					current_number++;
+//			} else if (e.getKeyCode() == NativeKeyEvent.VC_PAGE_DOWN) {
+//				if (screen_shot_number == current_number)
+//					take_pic();
+//				else
+//					current_number++;
+//			} else if (e.getKeyCode() == NativeKeyEvent.VC_RIGHT) {
+//				if (screen_shot_number == current_number)
+//					take_pic();
+//				else
+//					current_number++;
+//			} else if (e.getKeyCode() == NativeKeyEvent.VC_DOWN) {
+//				if (screen_shot_number == current_number)
+//					take_pic();
+//				else
+//					current_number++;
+//			} else if (e.getKeyCode() == NativeKeyEvent.VC_P)
+//				current_number--;
+//			else if (e.getKeyCode() == NativeKeyEvent.VC_PAGE_UP)
+//				current_number--;
+//			else if (e.getKeyCode() == NativeKeyEvent.VC_LEFT)
+//				current_number--;
+//			else if (e.getKeyCode() == NativeKeyEvent.VC_UP)
+//				current_number--;
+//			else if (e.getKeyCode() == NativeKeyEvent.VC_BACKSPACE)
+//				current_number--;
+//		}
 	}
 
 	public void nativeKeyReleased(NativeKeyEvent e) {

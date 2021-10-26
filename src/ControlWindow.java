@@ -30,7 +30,7 @@ public class ControlWindow extends JFrame {
 	
 	//The JFrame used to display everything and its characteristics
 	private static JFrame displayFrame;
-	private static final int WINDOW_WIDTH = 300;
+	private static final int WINDOW_WIDTH = 320;
 	private static final int WINDOW_HEIGHT = 85;
 	private static final String WINDOW_TITLE = "PiClicker";
 
@@ -59,6 +59,9 @@ public class ControlWindow extends JFrame {
 
 	private JLabel usbLabelGreen;
 	private JLabel webLabelGreen;
+
+	private String freq1 = "A";
+	private String freq2 = "A";
 	
 	private boolean shouldStart = true;
 	
@@ -150,10 +153,12 @@ public class ControlWindow extends JFrame {
 
 		startStopButton = new JButton("Start");
 		startStopButton.addActionListener(StartStop);
+		startStopButton.setPreferredSize(new Dimension(65, 30));
 		displayFrame.add(startStopButton);
 		
 		openCloseButton = new JButton("Show");
 		openCloseButton.addActionListener(OpenClose);
+		openCloseButton.setPreferredSize(new Dimension(70, 30));
 		displayFrame.add(openCloseButton);
 		
 
@@ -174,11 +179,17 @@ public class ControlWindow extends JFrame {
 		numResponsesText.setParagraphAttributes(attr, true);
 		numResponsesText.setFont(font);
 		numResponsesText.setText("-");
+		numResponsesText.setPreferredSize(new Dimension(27, 23));
 		displayFrame.add(numResponsesText);
 		
 		displayFrame.validate();
 		displayFrame.setVisible(true);
 		
+
+
+//		System.out.println(numResponsesText.getWidth());
+//
+//		System.out.println(numResponsesText.getHeight());
 		//Open the display
 		//openDisplay();
 	}
@@ -258,6 +269,7 @@ public class ControlWindow extends JFrame {
 			
 			if(web.isSessionStarted() && commandFromWeb) {
 				usb.startPoll();
+				web.takeScreenshot();
 			}
 			else if(!web.isSessionStarted()) {
 				usb.startPoll();
@@ -289,6 +301,19 @@ public class ControlWindow extends JFrame {
 			numResponsesText.setText("-");
 			shouldStart = true;
 		}
+	}
+	
+	public void setFrequency(String freq1, String freq2, boolean commandFromWeb) {
+		boolean isnew = !(this.freq1.equals(freq1) && this.freq2.equals(freq2));
+		if(!isnew) {
+			return;
+		}
+		
+		usb.changeFreq(freq1, freq2);
+		this.freq1 = freq1;
+		this.freq2 = freq2;
+		
+		System.out.println("Changing Frequency from web: " +  freq1 + ", " + freq2);
 	}
 	
 	public boolean isPollActive() {
