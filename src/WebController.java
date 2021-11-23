@@ -76,10 +76,13 @@ public class WebController {
 	private String pollID = "";
 	
 	private String instructorID = "";
+	private boolean loggedInFirstTime = false;
 	private boolean loggedInSuccessfully = false;
 
 	private boolean courseSelected = false;
 	private Course currentCourse;
+	
+	public boolean isConnected = false;
 	
 	JFrame displayFrame;
 	JPanel displayPanel;
@@ -463,7 +466,7 @@ public class WebController {
 				if(numCycles <= 0) {
 //					JOptionPane.showMessageDialog(displayFrame, "Timed out! Continuing without web functionality.");
 					controlWindow.updateWebStatus(false);
-					sessionID = "";
+//					sessionID = "";
 					return;
 				}
 			}
@@ -718,6 +721,10 @@ public class WebController {
 	}
 	
 	/**
+	 * Wants to start a poll. Clicked on app, and no reaction on web (or vice-versa).
+	 */
+	
+	/**
 	 * Sets up a socket connection with the server and then waits for commands issued
 	 * from the website and acts upon them accordingly.
 	 * 
@@ -731,10 +738,13 @@ public class WebController {
 	    		while(true) {
 		        	try {
 		    			socket = new WebsocketClientEndpoint(new URI(SOCKET_SERVER_HOSTNAME));
+		    			System.out.println("Created new Socket");
+		    			isConnected = true;
 		    			Thread.sleep(330);
 		    			break;
 		    		} catch (Exception e) {
 		    			System.err.println("Failed to connect!");
+		    			Thread.sleep(1000);
 //						JOptionPane.showMessageDialog(displayFrame, "Connection failed.");
 //		    			e.printStackTrace();
 		    		}
@@ -782,11 +792,11 @@ public class WebController {
 			        				boolean coursesMatch = updateCourseID.contentEquals(currentCourse.getID());
 			        				if(coursesMatch) {
 				        				boolean pollStatus = (boolean)data.get("pollStatus");
-				        				controlWindow.togglePoll(pollStatus, true);
-				        				
 				        				if(pollStatus) {
 				        					pollID = (String) data.get("pollID");
 				        				}
+				        				controlWindow.togglePoll(pollStatus, true);
+				        				
 			        				}
 			        			}
 			        			else if(updateFrom.contentEquals("iClickerFreq")) {
@@ -905,11 +915,6 @@ public class WebController {
 	}
 	
 	private void login(boolean loggedIn, JSONObject loginResponse) {// https://www.tutorialspoint.com/json/json_java_example.htm
-		
-		if(loggedInSuccessfully) {
-			return;
-		}
-		
 		// successfully logged in
 		if(loggedIn) {
 			this.loggedInSuccessfully = true;
@@ -977,7 +982,9 @@ public class WebController {
 			
 			// show the course selection menu
 			CardLayout layout = (CardLayout)displayPanel.getLayout();
-			layout.show(displayPanel, "Courses");
+			if(!loggedInFirstTime) {
+				layout.show(displayPanel, "Courses");
+			}
 		}
 		// error logging in
 		else {
@@ -1003,6 +1010,7 @@ public class WebController {
 							recievedResponseFromPoke = false;
 						}
 						else {
+							isConnected = false;
 							controlWindow.updateWebStatus(false);
 							SetupNotificationSocket();
 							break;

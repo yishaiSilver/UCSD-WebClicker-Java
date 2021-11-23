@@ -222,7 +222,7 @@ public class ControlWindow extends JFrame {
 			display.openDisplay();
 			setOpenCloseText("Hide");
 			
-			if(web.isSessionStarted() && !commandFromWeb) {
+			if(web.isConnected && !commandFromWeb) {
 				web.showPoll();
 			}
 		}
@@ -230,7 +230,7 @@ public class ControlWindow extends JFrame {
 			display.closeDisplay();
 			setOpenCloseText("Show");
 			
-			if(web.isSessionStarted() && !commandFromWeb) {
+			if(web.isConnected && !commandFromWeb) {
 				web.hidePoll();
 			}
 		}
@@ -260,18 +260,18 @@ public class ControlWindow extends JFrame {
 		if(state) {
 			display.nextQuestion();
 			
-			if(web.isSessionStarted() && !commandFromWeb) {
+			if(web.isConnected && !commandFromWeb) {
 				System.out.println("Creating poll");
 				web.createPoll();
 				web.activatePoll();
 				System.out.println("Created poll");
 			}
 			
-			if(web.isSessionStarted() && commandFromWeb) {
+			if(web.isConnected && commandFromWeb) {
 				usb.startPoll();
 				web.takeScreenshot();
 			}
-			else if(!web.isSessionStarted()) {
+			else if(!web.isConnected) {
 				usb.startPoll();
 			}
 	
@@ -285,14 +285,14 @@ public class ControlWindow extends JFrame {
 			shouldStart = false;
 		}
 		else {
-			if(web.isSessionStarted() && !commandFromWeb) {
+			if(web.isConnected && !commandFromWeb) {
 				web.deactivatePoll();
 			}
 			
-			if(web.isSessionStarted() && commandFromWeb) {
+			if(web.isConnected && commandFromWeb) {
 				usb.stopPoll();
 			}
-			else if(!web.isSessionStarted()) {
+			else if(!web.isConnected) {
 				usb.stopPoll();
 			}
 			
